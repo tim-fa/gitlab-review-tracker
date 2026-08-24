@@ -50,6 +50,13 @@ class GitLabClient:
         url = f"{self.base_url}/api/v4{path}"
         resp = self.session.get(url, timeout=15)
         if not resp.ok:
+            if resp.status_code in (401, 403):
+                raise GitLabError(
+                    "Authentication failed: the token is invalid, expired, or lacks the "
+                    "'read_api' scope. Create a new token and try again."
+                )
+            if resp.status_code == 404:
+                raise GitLabError(f"Not found: {path} (check the project URL / permissions).")
             raise GitLabError(f"GET {path} -> {resp.status_code}: {resp.text[:300]}")
         if resp.status_code == 204 or not resp.content:
             return None

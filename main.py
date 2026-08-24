@@ -18,7 +18,7 @@ from tkinter import messagebox, ttk
 import state_store
 from gitlab_client import GitLabClient, GitLabError, parse_project_url, get_gitlab_base_url_from_project_url
 
-program_version = "v1.0.2"
+program_version = "v1.0.3"
 
 CONFIG_PATH = Path.home() / ".gitlab_review_tracker.json"
 REFRESH_INTERVAL_MS = int(os.environ.get("GRT_REFRESH_SECONDS", "30")) * 1000
@@ -197,7 +197,8 @@ class ReviewTrackerApp:
             mrs = client.merge_requests(project_id)
             user = client.current_user()["username"]
         except (GitLabError, Exception) as exc:  # noqa: BLE001 - surface any failure to the UI
-            self.root.after(0, lambda: self._on_error(str(exc)))
+            message = str(exc)
+            self.root.after(0, lambda: self._on_error(message))
             return
 
         self.client = client
@@ -243,7 +244,8 @@ class ReviewTrackerApp:
             commits = self.client.commits(self.project_id, mr_iid)
             state = state_store.load_state(self.project_path, mr_iid)
         except (GitLabError, Exception) as exc:  # noqa: BLE001 - surface any failure to the UI
-            self.root.after(0, lambda: self._on_error(str(exc)))
+            message = str(exc)
+            self.root.after(0, lambda: self._on_error(message))
             return
 
         self.mr_iid = mr_iid
@@ -305,7 +307,8 @@ class ReviewTrackerApp:
         try:
             paths = self.client.commit_files(self.project_id, sha)
         except Exception as exc:  # noqa: BLE001 - surface any failure to the UI
-            self.root.after(0, lambda: self._on_error(str(exc)))
+            message = str(exc)
+            self.root.after(0, lambda: self._on_error(message))
             return
         self.commit_files_cache[sha] = paths
         self.root.after(0, lambda: self._show_commit_files(sha, paths))
@@ -340,7 +343,8 @@ class ReviewTrackerApp:
                 self.commit_files_cache[sha] = paths
             state = state_store.toggle_commit_with_files(self.project_path, self.mr_iid, sha, paths, self.current_user)
         except Exception as exc:  # noqa: BLE001 - surface any failure to the UI
-            self.root.after(0, lambda: self._on_error(str(exc)))
+            message = str(exc)
+            self.root.after(0, lambda: self._on_error(message))
             return
         self.state = state
         self.root.after(0, lambda: self._on_commit_toggled(sha, paths))
@@ -393,7 +397,8 @@ class ReviewTrackerApp:
             commit_paths = self.commit_files_cache.get(sha, [])
             state = state_store.sync_commit_from_files(self.project_path, self.mr_iid, sha, commit_paths)
         except Exception as exc:  # noqa: BLE001 - surface any failure to the UI
-            self.root.after(0, lambda: self._on_error(str(exc)))
+            message = str(exc)
+            self.root.after(0, lambda: self._on_error(message))
             return
         self.state = state
         self.root.after(0, lambda: self._on_file_toggled(sha, path))
