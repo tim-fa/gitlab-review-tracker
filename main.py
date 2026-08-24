@@ -18,6 +18,8 @@ from tkinter import messagebox, ttk
 import state_store
 from gitlab_client import GitLabClient, GitLabError, parse_project_url, get_gitlab_base_url_from_project_url
 
+program_version = "v1.0.0"
+
 CONFIG_PATH = Path.home() / ".gitlab_review_tracker.json"
 REFRESH_INTERVAL_MS = int(os.environ.get("GRT_REFRESH_SECONDS", "30")) * 1000
 
@@ -38,8 +40,8 @@ def save_config(cfg: dict) -> None:
 class ReviewTrackerApp:
     def __init__(self, root: tk.Tk):
         self.root = root
-        root.title("GitLab Review Tracker")
-        root.geometry("1000x600")
+        root.title(f"GitLab Review Tracker ({program_version})")
+        root.geometry("1200x600")
 
         self.client: GitLabClient | None = None
         self.project_id: int | None = None
@@ -67,6 +69,7 @@ class ReviewTrackerApp:
         self.project_url_var = tk.StringVar(value=cfg.get("project_url", cfg.get("mr_url", "")))
         self.token_var = tk.StringVar(value=cfg.get("token", ""))
         self.mr_display_var = tk.StringVar(value="")
+        self.version_var = tk.StringVar(value=program_version)
 
         ttk.Label(bar, text="Project URL").grid(row=0, column=0, sticky="w")
         ttk.Entry(bar, textvariable=self.project_url_var, width=70).grid(row=0, column=1, padx=4, sticky="we")
@@ -76,7 +79,7 @@ class ReviewTrackerApp:
         ttk.Button(bar, text="Create Token", command=lambda: webbrowser.open(f"{get_gitlab_base_url_from_project_url(self.project_url_var.get())}/-/user_settings/personal_access_tokens")).grid(row=1, column=1, padx=(200, 4), pady=(4, 0), sticky="w")
 
         self.fetch_button = ttk.Button(bar, text="Fetch MRs", command=self.on_fetch_mrs)
-        self.fetch_button.grid(row=0, column=2, rowspan=2, padx=8)
+        self.fetch_button.grid(row=0, column=2, rowspan=1, padx=8)
 
         ttk.Label(bar, text="Merge request").grid(row=2, column=0, sticky="w", pady=(6, 0))
         self.mr_combo = ttk.Combobox(bar, textvariable=self.mr_display_var, state="disabled", width=90)
@@ -89,6 +92,7 @@ class ReviewTrackerApp:
         self.progress.grid_remove()
 
         bar.columnconfigure(1, weight=1)
+        ttk.Label(bar, textvariable=self.version_var).grid(row=0, column=3, sticky="e")
 
     def _set_busy(self, busy: bool) -> None:
         self.fetch_button.configure(state="disabled" if busy else "normal")
@@ -229,7 +233,7 @@ class ReviewTrackerApp:
     def _on_error(self, message: str) -> None:
         self._set_busy(False)
         self.status_var.set("Error.")
-        messagebox.showerror("GitLab Review Tracker", message)
+        messagebox.showerror(f"GitLab Review Tracker", message)
 
     def _populate(self, commits: list[dict]) -> None:
         self.commits_tree.delete(*self.commits_tree.get_children())
