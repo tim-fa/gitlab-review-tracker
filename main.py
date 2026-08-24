@@ -137,7 +137,8 @@ class ReviewTrackerApp:
         tree = ttk.Treeview(parent, columns=columns, show="headings", selectmode="browse")
         for col in columns:
             tree.heading(col, text=headings[col])
-            tree.column(col, width=120 if col == "reviewers" else 220, stretch=True)
+            width = 80 if col == "sha" else 120 if col == "reviewers" else 220
+            tree.column(col, width=width, stretch=col != "sha")
         tree.tag_configure("reviewed", background="#d3f9d8")
         tree.pack(fill="both", expand=True, padx=4, pady=4)
         return tree
