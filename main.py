@@ -18,10 +18,20 @@ from tkinter import messagebox, ttk
 import state_store
 from gitlab_client import GitLabClient, GitLabError, parse_project_url, get_gitlab_base_url_from_project_url
 
-program_version = "v1.0.1"
+program_version = "v1.0.2"
 
 CONFIG_PATH = Path.home() / ".gitlab_review_tracker.json"
 REFRESH_INTERVAL_MS = int(os.environ.get("GRT_REFRESH_SECONDS", "30")) * 1000
+MAX_PROJECT_HISTORY = 15
+
+
+def add_to_history(history: list[str], value: str) -> list[str]:
+    value = value.strip()
+    if not value:
+        return history
+    history = [v for v in history if v != value]
+    history.insert(0, value)
+    return history[:MAX_PROJECT_HISTORY]
 
 
 def load_config() -> dict:
@@ -66,13 +76,20 @@ class ReviewTrackerApp:
         bar = ttk.Frame(self.root)
         bar.pack(fill="x", padx=8, pady=8)
 
-        self.project_url_var = tk.StringVar(value=cfg.get("project_url", cfg.get("mr_url", "")))
+        self.project_url_history: list[str] = cfg.get("project_url_history", [])
+        current_project_url = cfg.get("project_url", "")
+        if current_project_url:
+            self.project_url_history = add_to_history(self.project_url_history, current_project_url)
+        self.project_url_var = tk.StringVar(value=current_project_url)
         self.token_var = tk.StringVar(value=cfg.get("token", ""))
         self.mr_display_var = tk.StringVar(value="")
         self.version_var = tk.StringVar(value=program_version)
 
         ttk.Label(bar, text="Project URL").grid(row=0, column=0, sticky="w")
-        ttk.Entry(bar, textvariable=self.project_url_var, width=70).grid(row=0, column=1, padx=4, sticky="we")
+        self.project_url_combo = ttk.Combobox(
+            bar, textvariable=self.project_url_var, values=self.project_url_history, width=68
+        )
+        self.project_url_combo.grid(row=0, column=1, padx=4, sticky="we")
 
         ttk.Label(bar, text="Token (read_api)").grid(row=1, column=0, sticky="w")
         ttk.Entry(bar, textvariable=self.token_var, width=30, show="*").grid(row=1, column=1, padx=4, pady=(4, 0), sticky="w")
@@ -158,7 +175,9 @@ class ReviewTrackerApp:
             messagebox.showerror("Invalid URL", str(exc))
             return
 
-        save_config({"project_url": project_url, "token": token})
+        self.project_url_history = add_to_history(self.project_url_history, project_url)
+        self.project_url_combo["values"] = self.project_url_history
+        save_config({"project_url": project_url, "token": token, "project_url_history": self.project_url_history})
 
         if self._refresh_job is not None:
             self.root.after_cancel(self._refresh_job)
