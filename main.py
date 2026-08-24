@@ -18,7 +18,7 @@ from tkinter import messagebox, ttk
 import state_store
 from gitlab_client import GitLabClient, GitLabError, parse_project_url, get_gitlab_base_url_from_project_url
 
-program_version = "v1.0.0"
+program_version = "v1.0.1"
 
 CONFIG_PATH = Path.home() / ".gitlab_review_tracker.json"
 REFRESH_INTERVAL_MS = int(os.environ.get("GRT_REFRESH_SECONDS", "30")) * 1000
@@ -114,7 +114,9 @@ class ReviewTrackerApp:
         paned.add(files_frame, weight=1)
 
         self.commits_tree = self._make_tree(
-            commits_frame, ("sha", "title", "reviewers"), {"sha": "SHA", "title": "Message", "reviewers": "Reviewed by"}
+            commits_frame,
+            ("sha", "author", "title", "reviewers"),
+            {"sha": "SHA", "author": "Author", "title": "Message", "reviewers": "Reviewed by"},
         )
         self.commits_tree.tag_configure("merge", background="#e7f5ff")  # info color, may override with reviewed
 
@@ -137,7 +139,7 @@ class ReviewTrackerApp:
         tree = ttk.Treeview(parent, columns=columns, show="headings", selectmode="browse")
         for col in columns:
             tree.heading(col, text=headings[col])
-            width = 80 if col == "sha" else 120 if col == "reviewers" else 220
+            width = 80 if col == "sha" else 120 if col == "reviewers" else 100 if col == "author" else 220
             tree.column(col, width=width, stretch=col != "sha")
         tree.tag_configure("reviewed", background="#d3f9d8")
         tree.pack(fill="both", expand=True, padx=4, pady=4)
@@ -244,9 +246,13 @@ class ReviewTrackerApp:
             is_merge = len(commit.get("parent_ids") or []) > 1
             self.commit_is_merge[sha] = is_merge
             title = commit.get("title", "") + (" (merge commit)" if is_merge else "")
+            author_data = commit.get("author") or {}
+            author = commit.get("author_name") or author_data.get("name") or author_data.get("username", "")
             reviewers = self.state.get("commits", {}).get(sha, [])
             tags = (("merge",) if is_merge else ()) + (("reviewed",) if reviewers else ())
-            self.commits_tree.insert("", "end", iid=sha, values=(sha[:8], title, ", ".join(reviewers)), tags=tags)
+            self.commits_tree.insert(
+                "", "end", iid=sha, values=(sha[:8], author, title, ", ".join(reviewers)), tags=tags
+            )
 
         self.files_tree.delete(*self.files_tree.get_children())
         self.files_filter_var.set("Select a commit to see its files")
