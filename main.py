@@ -18,7 +18,7 @@ from tkinter import messagebox, ttk
 import state_store
 from gitlab_client import GitLabClient, GitLabError, parse_project_url, get_gitlab_base_url_from_project_url
 
-program_version = "v1.0.3"
+program_version = "v1.0.4"
 
 CONFIG_PATH = Path.home() / ".gitlab_review_tracker.json"
 REFRESH_INTERVAL_MS = int(os.environ.get("GRT_REFRESH_SECONDS", "30")) * 1000
@@ -216,7 +216,7 @@ class ReviewTrackerApp:
     def _populate_mr_list(self) -> None:
         self.mr_by_display = {}
         values = []
-        for mr in self.all_mrs:
+        for mr in sorted(self.all_mrs, key=lambda mr: int(mr["iid"]), reverse=True):
             display = f"!{mr['iid']} {mr.get('title', '')} [{mr.get('state', '')}]"
             self.mr_by_display[display] = mr
             values.append(display)
