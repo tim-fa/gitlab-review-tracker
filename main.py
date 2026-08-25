@@ -1,7 +1,7 @@
 """Tkinter desktop app for marking GitLab MR commits/files as reviewed.
 
 Review state is shared: it's stored as a JSON file on a network share (see
-state_store.py), so anyone running this tool against the same MR sees the
+review_state_store.py), so anyone running this tool against the same MR sees the
 same state. Only read-only GitLab API calls are made.
 """
 from __future__ import annotations
@@ -15,7 +15,7 @@ import webbrowser
 from pathlib import Path
 from tkinter import messagebox, ttk
 
-import state_store
+import review_state_store
 from gitlab_client import GitLabClient, GitLabError, parse_project_url, get_gitlab_base_url_from_project_url
 
 program_version = "v1.0.4"
@@ -242,7 +242,7 @@ class ReviewTrackerApp:
     def _load_worker(self, mr_iid: str) -> None:
         try:
             commits = self.client.commits(self.project_id, mr_iid)
-            state = state_store.load_state(self.project_path, mr_iid)
+            state = review_state_store.load_state(self.project_path, mr_iid)
         except (GitLabError, Exception) as exc:  # noqa: BLE001 - surface any failure to the UI
             message = str(exc)
             self.root.after(0, lambda: self._on_error(message))
@@ -284,7 +284,7 @@ class ReviewTrackerApp:
     def _populate_files(self, sha: str, paths: list[str]) -> None:
         self.files_tree.delete(*self.files_tree.get_children())
         for path in paths:
-            reviewers = self.state.get("files", {}).get(state_store.file_key(sha, path), [])
+            reviewers = self.state.get("files", {}).get(review_state_store.file_key(sha, path), [])
             tags = ("reviewed",) if reviewers else ()
             self.files_tree.insert(
                 "", "end", iid=path, values=(path, ", ".join(reviewers), "\U0001F517 View diff"), tags=tags
@@ -341,7 +341,7 @@ class ReviewTrackerApp:
             if paths is None:
                 paths = self.client.commit_files(self.project_id, sha)
                 self.commit_files_cache[sha] = paths
-            state = state_store.toggle_commit_with_files(self.project_path, self.mr_iid, sha, paths, self.current_user)
+            state = review_state_store.toggle_commit_with_files(self.project_path, self.mr_iid, sha, paths, self.current_user)
         except Exception as exc:  # noqa: BLE001 - surface any failure to the UI
             message = str(exc)
             self.root.after(0, lambda: self._on_error(message))
@@ -353,7 +353,7 @@ class ReviewTrackerApp:
         self._refresh_row(self.commits_tree, sha, "commits", sha)
         for path in paths:
             if self.files_tree.exists(path):
-                self._refresh_row(self.files_tree, path, "files", state_store.file_key(sha, path))
+                self._refresh_row(self.files_tree, path, "files", review_state_store.file_key(sha, path))
         self.status_var.set(f"Signed in as {self.current_user}.")
 
     def on_toggle_file(self) -> None:
@@ -392,10 +392,10 @@ class ReviewTrackerApp:
     def _toggle_file_worker(self, path: str) -> None:
         sha = self.active_commit_sha
         try:
-            key = state_store.file_key(sha, path)
-            state = state_store.toggle(self.project_path, self.mr_iid, "files", key, self.current_user)
+            key = review_state_store.file_key(sha, path)
+            state = review_state_store.toggle(self.project_path, self.mr_iid, "files", key, self.current_user)
             commit_paths = self.commit_files_cache.get(sha, [])
-            state = state_store.sync_commit_from_files(self.project_path, self.mr_iid, sha, commit_paths)
+            state = review_state_store.sync_commit_from_files(self.project_path, self.mr_iid, sha, commit_paths)
         except Exception as exc:  # noqa: BLE001 - surface any failure to the UI
             message = str(exc)
             self.root.after(0, lambda: self._on_error(message))
@@ -404,7 +404,7 @@ class ReviewTrackerApp:
         self.root.after(0, lambda: self._on_file_toggled(sha, path))
 
     def _on_file_toggled(self, sha: str, path: str) -> None:
-        self._refresh_row(self.files_tree, path, "files", state_store.file_key(sha, path))
+        self._refresh_row(self.files_tree, path, "files", review_state_store.file_key(sha, path))
         self._refresh_row(self.commits_tree, sha, "commits", sha)
         self.status_var.set(f"Signed in as {self.current_user}.")
 
@@ -429,7 +429,7 @@ class ReviewTrackerApp:
 
     def _refresh_worker(self) -> None:
         try:
-            state = state_store.load_state(self.project_path, self.mr_iid)
+            state = review_state_store.load_state(self.project_path, self.mr_iid)
         except Exception:  # noqa: BLE001 - a transient network hiccup shouldn't interrupt the app
             self.root.after(0, self._schedule_refresh)
             return
@@ -441,7 +441,7 @@ class ReviewTrackerApp:
             self._refresh_row(self.commits_tree, sha, "commits", sha)
         if self.active_commit_sha is not None:
             for path in self.files_tree.get_children():
-                self._refresh_row(self.files_tree, path, "files", state_store.file_key(self.active_commit_sha, path))
+                self._refresh_row(self.files_tree, path, "files", review_state_store.file_key(self.active_commit_sha, path))
         self._schedule_refresh()
 
 

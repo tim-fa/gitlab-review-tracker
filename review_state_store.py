@@ -46,7 +46,7 @@ def save_state(project_path: str, mr_iid: str, state: dict[str, Any]) -> None:
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(state, f, indent=2)
-        os.replace(tmp_name, path)  # atomic on the same volume, avoids torn reads
+        os.replace(tmp_name, path)
     finally:
         if os.path.exists(tmp_name):
             os.remove(tmp_name)

@@ -134,5 +134,5 @@ per-page limit. The client currently requests up to 100 results per endpoint.
 | --- | --- |
 | `main.py` | Tkinter application and review workflow |
 | `gitlab_client.py` | Read-only GitLab REST API client |
-| `state_store.py` | Shared JSON state management |
+| `review_state_store.py` | Shared JSON review-state management |
 | `requirements.txt` | Python dependencies |
