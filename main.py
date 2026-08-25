@@ -18,7 +18,7 @@ from tkinter import messagebox, ttk
 import review_state_store
 from gitlab_client import GitLabClient, GitLabError, parse_project_url, get_gitlab_base_url_from_project_url
 
-program_version = "v1.0.4"
+program_version = "v1.1.0"
 
 CONFIG_PATH = Path.home() / ".gitlab_review_tracker.json"
 REFRESH_INTERVAL_MS = int(os.environ.get("GRT_REFRESH_SECONDS", "30")) * 1000
@@ -51,7 +51,10 @@ class ReviewTrackerApp:
     def __init__(self, root: tk.Tk):
         self.root = root
         root.title(f"GitLab Review Tracker ({program_version})")
-        root.geometry("1200x600")
+        root.geometry("1180x700")
+        root.minsize(900, 560)
+        root.configure(background="#f6f5f2")
+        self._configure_styles()
 
         self.client: GitLabClient | None = None
         self.project_id: int | None = None
@@ -65,16 +68,59 @@ class ReviewTrackerApp:
         self._refresh_job: str | None = None
         self.all_mrs: list[dict] = []
         self.mr_by_display: dict[str, dict] = {}
+        self.commit_count_var = tk.StringVar(value="0")
+        self.reviewed_commit_count_var = tk.StringVar(value="0")
+        self.file_count_var = tk.StringVar(value="0")
+        self.reviewed_file_count_var = tk.StringVar(value="0")
 
         cfg = load_config()
         self._build_connection_bar(cfg)
         self._build_lists()
-        self.status_var = tk.StringVar(value="Not connected.")
-        ttk.Label(root, textvariable=self.status_var, anchor="w").pack(fill="x", padx=8, pady=(0, 6))
+        self.status_var = tk.StringVar(value="Not connected. Enter a project URL and token to begin.")
+        ttk.Label(root, textvariable=self.status_var, style="Status.TLabel", anchor="w").pack(
+            fill="x", padx=24, pady=(0, 12)
+        )
+
+    def _configure_styles(self) -> None:
+
+        font: str = "Segoe UI"
+
+        style = ttk.Style(self.root)
+        style.theme_use("clam")
+        style.configure("TFrame", background="#f6f5f2")
+        style.configure("Surface.TFrame", background="#fffefa")
+        style.configure("Header.TFrame", background="#fffefa")
+        style.configure("TLabel", background="#fffefa", foreground="#3f4548", font=(font, 10))
+        style.configure("Muted.TLabel", background="#fffefa", foreground="#777b7b", font=(font, 9))
+        style.configure("Title.TLabel", background="#fffefa", foreground="#292e30", font=(font, 19, "bold"))
+        style.configure("Subtitle.TLabel", background="#fffefa", foreground="#777b7b", font=(font, 9))
+        style.configure("Status.TLabel", background="#f6f5f2", foreground="#777b7b", font=(font, 9))
+        style.configure("Field.TLabel", background="#fffefa", foreground="#777b7b", font=(font, 9, "bold"))
+        style.configure("TEntry", fieldbackground="#faf9f6", foreground="#292e30", insertcolor="#292e30", borderwidth=0)
+        style.configure("TCombobox", fieldbackground="#faf9f6", background="#faf9f6", foreground="#292e30", borderwidth=0)
+        style.map("TCombobox", fieldbackground=[("readonly", "#faf9f6")], foreground=[("readonly", "#292e30")])
+        style.configure("Accent.TButton", background="#f97362", foreground="#292e30", font=(font, 9, "bold"), padding=(10, 5), borderwidth=0)
+        style.map("Accent.TButton", background=[("active", "#fb8b78"), ("disabled", "#f7b0a5")])
+        style.configure("Secondary.TButton", background="#ebe9e4", foreground="#3f4548", font=(font, 9), padding=(9, 5), borderwidth=0)
+        style.map("Secondary.TButton", background=[("active", "#dedbd4")])
+        style.configure("Card.TFrame", background="#fffefa")
+        style.configure("CardValue.TLabel", background="#fffefa", foreground="#292e30", font=(font, 16, "bold"))
+        style.configure("CardLabel.TLabel", background="#fffefa", foreground="#777b7b", font=(font, 9))
+        style.configure("TLabelframe", background="#fffefa", bordercolor="#dedbd4", relief="solid")
+        style.configure("TLabelframe.Label", background="#fffefa", foreground="#3f4548", font=(font, 10, "bold"))
+        style.configure("Treeview", background="#fffefa", fieldbackground="#fffefa", foreground="#3f4548", rowheight=34, borderwidth=0, font=(font, 9))
+        style.configure("Treeview.Heading", background="#f0eee9", foreground="#777b7b", font=(font, 9, "bold"), relief="flat", padding=8)
+        style.map("Treeview", background=[("selected", "#fbe4dc")], foreground=[("selected", "#292e30")])
+        style.configure("Horizontal.TProgressbar", background="#f97362", troughcolor="#e3e1dc", borderwidth=0)
 
     def _build_connection_bar(self, cfg: dict) -> None:
-        bar = ttk.Frame(self.root)
-        bar.pack(fill="x", padx=8, pady=8)
+        header = ttk.Frame(self.root, style="Header.TFrame", padding=(20, 14, 20, 12))
+        header.pack(fill="x")
+        ttk.Label(header, text="Review Tracker", style="Title.TLabel").pack(anchor="w")
+        ttk.Label(header, text="Shared GitLab merge request review workspace", style="Subtitle.TLabel").pack(anchor="w", pady=(2, 10))
+
+        bar = ttk.Frame(self.root, style="Surface.TFrame", padding=(20, 12, 20, 14))
+        bar.pack(fill="x", padx=20, pady=(12, 10))
 
         self.project_url_history: list[str] = cfg.get("project_url_history", [])
         current_project_url = cfg.get("project_url", "")
@@ -85,31 +131,36 @@ class ReviewTrackerApp:
         self.mr_display_var = tk.StringVar(value="")
         self.version_var = tk.StringVar(value=program_version)
 
-        ttk.Label(bar, text="Project URL").grid(row=0, column=0, sticky="w")
+        ttk.Label(bar, text="Project URL", style="Field.TLabel").grid(row=0, column=0, sticky="w")
         self.project_url_combo = ttk.Combobox(
-            bar, textvariable=self.project_url_var, values=self.project_url_history, width=68
+            bar, textvariable=self.project_url_var, values=self.project_url_history, width=52
         )
         self.project_url_combo.grid(row=0, column=1, padx=4, sticky="we")
 
-        ttk.Label(bar, text="Token (read_api)").grid(row=1, column=0, sticky="w")
+        ttk.Label(bar, text="Access token", style="Field.TLabel").grid(row=1, column=0, sticky="w")
         ttk.Entry(bar, textvariable=self.token_var, width=30, show="*").grid(row=1, column=1, padx=4, pady=(4, 0), sticky="w")
-        ttk.Button(bar, text="Create Token", command=lambda: webbrowser.open(f"{get_gitlab_base_url_from_project_url(self.project_url_var.get())}/-/user_settings/personal_access_tokens")).grid(row=1, column=1, padx=(200, 4), pady=(4, 0), sticky="w")
+        actions = ttk.Frame(bar, style="Surface.TFrame")
+        actions.grid(row=0, column=3, rowspan=2, padx=(8, 0), sticky="ne")
 
-        self.fetch_button = ttk.Button(bar, text="Fetch MRs", command=self.on_fetch_mrs)
-        self.fetch_button.grid(row=0, column=2, rowspan=1, padx=8)
+        self.fetch_button = ttk.Button(actions, text="Fetch MRs", width=14, style="Accent.TButton", command=self.on_fetch_mrs)
+        self.fetch_button.pack(fill="x", pady=(0, 4))
 
-        ttk.Label(bar, text="Merge request").grid(row=2, column=0, sticky="w", pady=(6, 0))
-        self.mr_combo = ttk.Combobox(bar, textvariable=self.mr_display_var, state="disabled", width=90)
-        self.mr_combo.grid(row=2, column=1, padx=4, pady=(6, 0), sticky="we")
+        ttk.Button(actions, text="Create token", width=14,
+                   style="Secondary.TButton",
+                   command=lambda: webbrowser.open(f"{get_gitlab_base_url_from_project_url(self.project_url_var.get())}/-/user_settings/personal_access_tokens")).pack(fill="x")
+
+        ttk.Label(bar, text="Merge request", style="Field.TLabel").grid(row=2, column=0, sticky="w", pady=(14, 0))
+        self.mr_combo = ttk.Combobox(bar, textvariable=self.mr_display_var, state="disabled", width=70)
+        self.mr_combo.grid(row=2, column=1, columnspan=3, padx=0, pady=(14, 0), sticky="we")
         self.mr_combo.bind("<<ComboboxSelected>>", self.on_mr_selected)
         self.mr_display_var.set("Fetch MRs to load the list")
 
         self.progress = ttk.Progressbar(bar, mode="indeterminate")
-        self.progress.grid(row=3, column=0, columnspan=3, padx=4, pady=(6, 0), sticky="we")
+        self.progress.grid(row=3, column=0, columnspan=4, pady=(14, 0), sticky="we")
         self.progress.grid_remove()
 
         bar.columnconfigure(1, weight=1)
-        ttk.Label(bar, textvariable=self.version_var).grid(row=0, column=3, sticky="e")
+        ttk.Label(bar, textvariable=self.version_var, style="Muted.TLabel").grid(row=3, column=3, sticky="e", pady=(8, 0))
 
     def _set_busy(self, busy: bool) -> None:
         self.fetch_button.configure(state="disabled" if busy else "normal")
@@ -122,11 +173,20 @@ class ReviewTrackerApp:
             self.progress.grid_remove()
 
     def _build_lists(self) -> None:
-        paned = ttk.PanedWindow(self.root, orient="horizontal")
-        paned.pack(fill="both", expand=True, padx=8, pady=(0, 8))
+        metrics = ttk.Frame(self.root)
+        metrics.pack(fill="x", padx=20, pady=(0, 10))
+        self._metric_card(metrics, "Commits", self.commit_count_var, 0)
+        self._metric_card(metrics, "Reviewed commits", self.reviewed_commit_count_var, 1)
+        self._metric_card(metrics, "Changed files", self.file_count_var, 2)
+        self._metric_card(metrics, "Reviewed files", self.reviewed_file_count_var, 3)
+        for column in range(4):
+            metrics.columnconfigure(column, weight=1)
 
-        commits_frame = ttk.Labelframe(paned, text="Commits (select to see its files, double-click to toggle reviewed)")
-        files_frame = ttk.Labelframe(paned, text="Files of selected commit (double-click to toggle reviewed)")
+        paned = ttk.PanedWindow(self.root, orient="horizontal")
+        paned.pack(fill="both", expand=True, padx=20, pady=(0, 10))
+
+        commits_frame = ttk.Labelframe(paned, text="  Commits")
+        files_frame = ttk.Labelframe(paned, text=" Changed files")
         paned.add(commits_frame, weight=1)
         paned.add(files_frame, weight=1)
 
@@ -135,12 +195,7 @@ class ReviewTrackerApp:
             ("sha", "author", "title", "reviewers"),
             {"sha": "SHA", "author": "Author", "title": "Message", "reviewers": "Reviewed by"},
         )
-        self.commits_tree.tag_configure("merge", background="#e7f5ff")  # info color, may override with reviewed
-
-        self.files_filter_var = tk.StringVar(value="Select a commit to see its files")
-        self.files_filter_label = ttk.Label(files_frame, textvariable=self.files_filter_var, anchor="w")
-        self.files_filter_label.pack(fill="x", padx=4, pady=(4, 0))
-        self._default_filter_color = self.files_filter_label.cget("foreground")
+        self.commits_tree.tag_configure("merge", background="#f5eee1", foreground="#806548")
 
         self.files_tree = self._make_tree(
             files_frame, ("path", "reviewers", "open"), {"path": "File", "reviewers": "Reviewed by", "open": "GitLab"}
@@ -152,13 +207,19 @@ class ReviewTrackerApp:
         self.files_tree.bind("<Double-1>", self.on_files_tree_double_click)
         self.files_tree.bind("<Button-1>", self.on_files_tree_click)
 
+    def _metric_card(self, parent: ttk.Frame, label: str, variable: tk.StringVar, column: int) -> None:
+        card = ttk.Frame(parent, style="Card.TFrame", padding=(16, 10))
+        card.grid(row=0, column=column, sticky="nsew", padx=(0 if column == 0 else 6, 6 if column < 3 else 0))
+        ttk.Label(card, textvariable=variable, style="CardValue.TLabel").pack(anchor="w")
+        ttk.Label(card, text=label, style="CardLabel.TLabel").pack(anchor="w", pady=(2, 0))
+
     def _make_tree(self, parent, columns, headings) -> ttk.Treeview:
         tree = ttk.Treeview(parent, columns=columns, show="headings", selectmode="browse")
         for col in columns:
             tree.heading(col, text=headings[col])
-            width = 80 if col == "sha" else 120 if col == "reviewers" else 100 if col == "author" else 220
+            width = 72 if col == "sha" else 108 if col == "reviewers" else 92 if col == "author" else 180
             tree.column(col, width=width, stretch=col != "sha")
-        tree.tag_configure("reviewed", background="#d3f9d8")
+        tree.tag_configure("reviewed", background="#dcfce7", foreground="#166534")
         tree.pack(fill="both", expand=True, padx=4, pady=4)
         return tree
 
@@ -262,6 +323,7 @@ class ReviewTrackerApp:
     def _populate(self, commits: list[dict]) -> None:
         self.commits_tree.delete(*self.commits_tree.get_children())
         self.commit_is_merge = {}
+        reviewed_commits = 0
         for commit in commits:
             sha = commit["id"]
             is_merge = len(commit.get("parent_ids") or []) > 1
@@ -270,25 +332,33 @@ class ReviewTrackerApp:
             author_data = commit.get("author") or {}
             author = commit.get("author_name") or author_data.get("name") or author_data.get("username", "")
             reviewers = self.state.get("commits", {}).get(sha, [])
+            reviewed_commits += bool(reviewers)
             tags = (("merge",) if is_merge else ()) + (("reviewed",) if reviewers else ())
             self.commits_tree.insert(
                 "", "end", iid=sha, values=(sha[:8], author, title, ", ".join(reviewers)), tags=tags
             )
 
         self.files_tree.delete(*self.files_tree.get_children())
-        self.files_filter_var.set("Select a commit to see its files")
+        self.commit_count_var.set(str(len(commits)))
+        self.reviewed_commit_count_var.set(str(reviewed_commits))
+        self.file_count_var.set("0")
+        self.reviewed_file_count_var.set("0")
         self._set_busy(False)
         self.status_var.set(f"Loaded as {self.current_user}. {len(commits)} commits.")
         self._schedule_refresh()
 
     def _populate_files(self, sha: str, paths: list[str]) -> None:
         self.files_tree.delete(*self.files_tree.get_children())
+        reviewed_files = 0
         for path in paths:
             reviewers = self.state.get("files", {}).get(review_state_store.file_key(sha, path), [])
             tags = ("reviewed",) if reviewers else ()
+            reviewed_files += bool(reviewers)
             self.files_tree.insert(
                 "", "end", iid=path, values=(path, ", ".join(reviewers), "\U0001F517 View diff"), tags=tags
             )
+        self.file_count_var.set(str(len(paths)))
+        self.reviewed_file_count_var.set(str(reviewed_files))
 
     def on_commit_selected(self, _event=None) -> None:
         selection = self.commits_tree.selection()
@@ -300,7 +370,6 @@ class ReviewTrackerApp:
         if cached is not None:
             self._show_commit_files(sha, cached)
             return
-        self.files_filter_var.set(f"Loading files for commit {sha[:8]}...")
         threading.Thread(target=self._fetch_commit_files_worker, args=(sha,), daemon=True).start()
 
     def _fetch_commit_files_worker(self, sha: str) -> None:
@@ -317,15 +386,6 @@ class ReviewTrackerApp:
         if self.active_commit_sha != sha:
             return  # user selected a different commit while this was loading
         self._populate_files(sha, paths)
-        if not paths and self.commit_is_merge.get(sha):
-            self.files_filter_label.configure(foreground="#3f93e2")
-            self.files_filter_var.set(
-                f"Merge commit {sha[:8]}: no direct file changes vs. its first parent "
-                "(its changes are covered by the individual commits above)"
-            )
-        else:
-            self.files_filter_label.configure(foreground=self._default_filter_color)
-            self.files_filter_var.set(f"Files in commit {sha[:8]} ({len(paths)} files)")
 
     def on_toggle_commit(self) -> None:
         selection = self.commits_tree.selection()
@@ -354,6 +414,7 @@ class ReviewTrackerApp:
         for path in paths:
             if self.files_tree.exists(path):
                 self._refresh_row(self.files_tree, path, "files", review_state_store.file_key(sha, path))
+        self._update_metrics()
         self.status_var.set(f"Signed in as {self.current_user}.")
 
     def on_toggle_file(self) -> None:
@@ -406,6 +467,7 @@ class ReviewTrackerApp:
     def _on_file_toggled(self, sha: str, path: str) -> None:
         self._refresh_row(self.files_tree, path, "files", review_state_store.file_key(sha, path))
         self._refresh_row(self.commits_tree, sha, "commits", sha)
+        self._update_metrics()
         self.status_var.set(f"Signed in as {self.current_user}.")
 
     def _refresh_row(self, tree: ttk.Treeview, item_id: str, kind: str, key: str) -> None:
@@ -416,6 +478,16 @@ class ReviewTrackerApp:
         is_merge = kind == "commits" and self.commit_is_merge.get(item_id, False)
         tags = (("merge",) if is_merge else ()) + (("reviewed",) if reviewers else ())
         tree.item(item_id, tags=tags)
+
+    def _update_metrics(self) -> None:
+        commit_rows = self.commits_tree.get_children()
+        file_rows = self.files_tree.get_children()
+        reviewed_commits = sum("reviewed" in self.commits_tree.item(item, "tags") for item in commit_rows)
+        reviewed_files = sum("reviewed" in self.files_tree.item(item, "tags") for item in file_rows)
+        self.commit_count_var.set(str(len(commit_rows)))
+        self.reviewed_commit_count_var.set(str(reviewed_commits))
+        self.file_count_var.set(str(len(file_rows)))
+        self.reviewed_file_count_var.set(str(reviewed_files))
 
     def _schedule_refresh(self) -> None:
         if self._refresh_job is not None:
@@ -442,6 +514,7 @@ class ReviewTrackerApp:
         if self.active_commit_sha is not None:
             for path in self.files_tree.get_children():
                 self._refresh_row(self.files_tree, path, "files", review_state_store.file_key(self.active_commit_sha, path))
+        self._update_metrics()
         self._schedule_refresh()
 
 
