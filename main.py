@@ -56,7 +56,7 @@ class ReviewTrackerApp:
         self.client: GitLabClient | None = None
         self.project_id: int | None = None
         self.project_path: str | None = None
-        self.mr_iid: str | None = None
+        self.mr_iid: int | None = None
         self.state: dict = {"files": {}, "commits": {}}
         self.current_user: str | None = None
         self.commit_files_cache: dict[str, list[str]] = {}
@@ -229,7 +229,7 @@ class ReviewTrackerApp:
         mr = self.mr_by_display.get(self.mr_display_var.get())
         if not mr or not (self.client and self.project_id and self.project_path):
             return
-        mr_iid = str(mr["iid"])
+        mr_iid = int(mr["iid"])
 
         if self._refresh_job is not None:
             self.root.after_cancel(self._refresh_job)
@@ -239,7 +239,7 @@ class ReviewTrackerApp:
         self.status_var.set(f"Loading !{mr_iid}...")
         threading.Thread(target=self._load_worker, args=(mr_iid,), daemon=True).start()
 
-    def _load_worker(self, mr_iid: str) -> None:
+    def _load_worker(self, mr_iid: int) -> None:
         try:
             commits = self.client.commits(self.project_id, mr_iid)
             state = review_state_store.load_state(self.project_path, mr_iid)

@@ -78,7 +78,7 @@ class GitLabClient:
             f"/projects/{project_id}/merge_requests?state=opened&per_page=100&order_by=updated_at&sort=desc"
         ) or []
 
-    def commits(self, project_id: int, mr_iid: str) -> list[dict[str, Any]]:
+    def commits(self, project_id: int, mr_iid: int) -> list[dict[str, Any]]:
         return self._get(f"/projects/{project_id}/merge_requests/{mr_iid}/commits?per_page=100") or []
 
     def commit_files(self, project_id: int, sha: str) -> list[str]:

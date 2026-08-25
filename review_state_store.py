@@ -25,11 +25,11 @@ def _safe_name(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]+", "_", value)
 
 
-def state_file(project_path: str, mr_iid: str) -> Path:
+def state_file(project_path: str, mr_iid: int) -> Path:
     return state_root() / _safe_name(project_path) / f"mr_{mr_iid}.json"
 
 
-def load_state(project_path: str, mr_iid: str) -> dict[str, Any]:
+def load_state(project_path: str, mr_iid: int) -> dict[str, Any]:
     path = state_file(project_path, mr_iid)
     if not path.exists():
         return {"files": {}, "commits": {}}
@@ -39,7 +39,7 @@ def load_state(project_path: str, mr_iid: str) -> dict[str, Any]:
         return {"files": {}, "commits": {}}
 
 
-def save_state(project_path: str, mr_iid: str, state: dict[str, Any]) -> None:
+def save_state(project_path: str, mr_iid: int, state: dict[str, Any]) -> None:
     path = state_file(project_path, mr_iid)
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=".tmp_", suffix=".json")
@@ -89,7 +89,7 @@ def _recompute_commit_reviewers(state: dict[str, Any], sha: str, file_paths: lis
         bucket.pop(sha, None)
 
 
-def toggle(project_path: str, mr_iid: str, kind: str, key: str, username: str) -> dict[str, Any]:
+def toggle(project_path: str, mr_iid: int, kind: str, key: str, username: str) -> dict[str, Any]:
     state = load_state(project_path, mr_iid)
     reviewers = state.get(kind, {}).get(key, [])
     reviewed = username not in reviewers
@@ -99,7 +99,7 @@ def toggle(project_path: str, mr_iid: str, kind: str, key: str, username: str) -
 
 
 def toggle_commit_with_files(
-    project_path: str, mr_iid: str, sha: str, file_paths: list[str], username: str
+    project_path: str, mr_iid: int, sha: str, file_paths: list[str], username: str
 ) -> dict[str, Any]:
     """Toggle the current user's reviewed state on all of a commit's files.
 
@@ -123,7 +123,7 @@ def toggle_commit_with_files(
     return state
 
 
-def sync_commit_from_files(project_path: str, mr_iid: str, sha: str, file_paths: list[str]) -> dict[str, Any]:
+def sync_commit_from_files(project_path: str, mr_iid: int, sha: str, file_paths: list[str]) -> dict[str, Any]:
     """Re-derive a commit's reviewed state from its files' reviewed state."""
     state = load_state(project_path, mr_iid)
     _recompute_commit_reviewers(state, sha, file_paths)
