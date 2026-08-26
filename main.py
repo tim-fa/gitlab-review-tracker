@@ -18,7 +18,7 @@ from tkinter import messagebox, ttk
 import review_state_store
 from gitlab_client import GitLabClient, GitLabError, parse_project_url, get_gitlab_base_url_from_project_url
 
-program_version = "v1.1.0"
+program_version = "v1.1.1"
 
 CONFIG_PATH = Path.home() / ".gitlab_review_tracker.json"
 REFRESH_INTERVAL_MS = int(os.environ.get("GRT_REFRESH_SECONDS", "30")) * 1000
@@ -104,14 +104,26 @@ class ReviewTrackerApp:
         style.configure("Secondary.TButton", background="#ebe9e4", foreground="#3f4548", font=(font, 9), padding=(9, 5), borderwidth=0)
         style.map("Secondary.TButton", background=[("active", "#dedbd4")])
         style.configure("Card.TFrame", background="#fffefa")
-        style.configure("CardValue.TLabel", background="#fffefa", foreground="#292e30", font=(font, 16, "bold"))
-        style.configure("CardLabel.TLabel", background="#fffefa", foreground="#777b7b", font=(font, 9))
+        style.configure("CardValue.TLabel", background="#fffefa", foreground="#292e30", font=(font, 13, "bold"))
+        style.configure("CardLabel.TLabel", background="#fffefa", foreground="#777b7b", font=(font, 8))
         style.configure("TLabelframe", background="#fffefa", bordercolor="#dedbd4", relief="solid")
         style.configure("TLabelframe.Label", background="#fffefa", foreground="#3f4548", font=(font, 10, "bold"))
-        style.configure("Treeview", background="#fffefa", fieldbackground="#fffefa", foreground="#3f4548", rowheight=34, borderwidth=0, font=(font, 9))
+        style.configure("Treeview", background="#fffefa", fieldbackground="#fffefa", foreground="#3f4548", rowheight=24, borderwidth=0, font=(font, 8))
         style.configure("Treeview.Heading", background="#f0eee9", foreground="#777b7b", font=(font, 9, "bold"), relief="flat", padding=8)
         style.map("Treeview", background=[("selected", "#fbe4dc")], foreground=[("selected", "#292e30")])
         style.configure("Horizontal.TProgressbar", background="#f97362", troughcolor="#e3e1dc", borderwidth=0)
+        style.configure(
+            "Slim.Vertical.TScrollbar",
+            background="#d8d4cc",
+            troughcolor="#f4f2ed",
+            bordercolor="#f4f2ed",
+            arrowcolor="#8f938f",
+            relief="flat",
+            width=10,
+            arrowsize=10,
+            gripcount=0,
+        )
+        style.map("Slim.Vertical.TScrollbar", background=[("active", "#c9c4ba")])
 
     def _build_connection_bar(self, cfg: dict) -> None:
         header = ttk.Frame(self.root, style="Header.TFrame", padding=(20, 14, 20, 12))
@@ -208,19 +220,27 @@ class ReviewTrackerApp:
         self.files_tree.bind("<Button-1>", self.on_files_tree_click)
 
     def _metric_card(self, parent: ttk.Frame, label: str, variable: tk.StringVar, column: int) -> None:
-        card = ttk.Frame(parent, style="Card.TFrame", padding=(16, 10))
+        card = ttk.Frame(parent, style="Card.TFrame", padding=(12, 7))
         card.grid(row=0, column=column, sticky="nsew", padx=(0 if column == 0 else 6, 6 if column < 3 else 0))
         ttk.Label(card, textvariable=variable, style="CardValue.TLabel").pack(anchor="w")
-        ttk.Label(card, text=label, style="CardLabel.TLabel").pack(anchor="w", pady=(2, 0))
+        ttk.Label(card, text=label, style="CardLabel.TLabel").pack(anchor="w", pady=(1, 0))
 
     def _make_tree(self, parent, columns, headings) -> ttk.Treeview:
-        tree = ttk.Treeview(parent, columns=columns, show="headings", selectmode="browse")
+        container = ttk.Frame(parent, style="Surface.TFrame")
+        container.pack(fill="both", expand=True, padx=4, pady=4)
+
+        tree = ttk.Treeview(container, columns=columns, show="headings", selectmode="browse")
         for col in columns:
             tree.heading(col, text=headings[col])
             width = 72 if col == "sha" else 108 if col == "reviewers" else 92 if col == "author" else 180
             tree.column(col, width=width, stretch=col != "sha")
         tree.tag_configure("reviewed", background="#dcfce7", foreground="#166534")
-        tree.pack(fill="both", expand=True, padx=4, pady=4)
+
+        scrollbar = ttk.Scrollbar(container, orient="vertical", style="Slim.Vertical.TScrollbar", command=tree.yview)
+        tree.configure(yscrollcommand=scrollbar.set)
+
+        tree.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
         return tree
 
     def on_fetch_mrs(self) -> None:
