@@ -17,8 +17,9 @@ from tkinter import messagebox, ttk
 
 import review_state_store
 from gitlab_client import GitLabClient, GitLabError, parse_project_url, get_gitlab_base_url_from_project_url
+from git_helper import show_changes_compared_to_main
 
-program_version = "v1.1.1"
+program_version = "v1.2.0"
 
 CONFIG_PATH = Path.home() / ".gitlab_review_tracker.json"
 REFRESH_INTERVAL_MS = int(os.environ.get("GRT_REFRESH_SECONDS", "30")) * 1000
@@ -216,8 +217,13 @@ class ReviewTrackerApp:
 
         self.commits_tree.bind("<Double-1>", lambda e: self.on_toggle_commit())
         self.commits_tree.bind("<<TreeviewSelect>>", self.on_commit_selected)
+        self.commits_tree.bind("<Button-3>", self.on_commits_tree_right_click)
         self.files_tree.bind("<Double-1>", self.on_files_tree_double_click)
         self.files_tree.bind("<Button-1>", self.on_files_tree_click)
+
+        self.commits_context_menu = tk.Menu(self.root, tearoff=0)
+        self.commits_context_menu.add_command(label="Mark as reviewed", command=lambda: self.on_toggle_commit())
+        self.commits_context_menu.add_command(label="Show changes compared to main", command=self._compare_selected_commit_to_main)
 
     def _metric_card(self, parent: ttk.Frame, label: str, variable: tk.StringVar, column: int) -> None:
         card = ttk.Frame(parent, style="Card.TFrame", padding=(12, 7))
@@ -468,6 +474,96 @@ class ReviewTrackerApp:
         # GitLab anchors file diffs by the SHA1 hex digest of the file path.
         anchor = hashlib.sha1(path.encode("utf-8")).hexdigest()
         url = f"{self.client.base_url}/{self.project_path}/-/merge_requests/{self.mr_iid}/diffs?commit_id={sha}#diff-content-{anchor}"
+        webbrowser.open(url)
+
+    def on_commits_tree_right_click(self, event: tk.Event) -> None:
+        sha = self.commits_tree.identify_row(event.y)
+        if not sha:
+            return
+        self.commits_tree.selection_set(sha)
+        self.commits_context_menu.tk_popup(event.x_root, event.y_root)
+
+    def _compare_selected_commit_to_main(self) -> None:
+        selection = self.commits_tree.selection()
+        if not selection or not (self.client and self.project_path):
+            return
+        sha = selection[0]
+        older_sha = self.commits_tree.next(sha)
+        if not older_sha:
+            messagebox.showinfo("No previous commit", "This is the oldest commit in the list; there is no previous commit to compare against.")
+            return
+        paths = self.commit_files_cache.get(sha)
+        if paths is None:
+            messagebox.showinfo("No file paths", "No file paths are available for the selected commit.")
+            return
+
+        self.status_var.set("Comparing to main...")
+        threading.Thread(
+            target=self._compare_to_main_worker, args=(sha, older_sha, paths), daemon=True
+        ).start()
+
+    def _compare_to_main_worker(self, sha: str, older_sha: str, paths: list[str]) -> None:
+        try:
+            diff_files = show_changes_compared_to_main(
+                repo_url=self.project_url_var.get(),
+                commit_to_compare_sha=sha,
+                previous_commit_sha=older_sha,
+                files_of_commit=paths,
+            )
+        except Exception as exc:  # noqa: BLE001 - surface any failure to the UI
+            message = str(exc)
+            self.root.after(0, lambda: self._on_error(message))
+            return
+        self.root.after(0, lambda: self._on_compare_to_main_done(sha, diff_files))
+
+    def _on_compare_to_main_done(self, sha: str, diff_files: list[str]) -> None:
+        self.status_var.set(f"Signed in as {self.current_user}.")
+        if not diff_files:
+            messagebox.showinfo("No differences", "No differences compared to main.")
+            return
+        self._show_diff_files_window(sha, diff_files)
+
+    def _show_diff_files_window(self, sha: str, diff_files: list[str]) -> None:
+        window = tk.Toplevel(self.root)
+        window.title(f"Changes vs main - {sha[:8]}")
+        window.geometry("640x420")
+        window.configure(background="#f6f5f2")
+
+        ttk.Label(
+            window, text=f"Files of commit {sha[:8]} that differ from main ({len(diff_files)})", style="Field.TLabel"
+        ).pack(anchor="w", padx=12, pady=(12, 6))
+
+        container = ttk.Frame(window, style="Surface.TFrame")
+        container.pack(fill="both", expand=True, padx=12, pady=(0, 12))
+
+        tree = ttk.Treeview(container, columns=("path", "open"), show="headings", selectmode="browse")
+        tree.heading("path", text="File")
+        tree.heading("open", text="GitLab")
+        tree.column("path", width=460, stretch=True)
+        tree.column("open", width=100, stretch=False, anchor="center")
+        for path in diff_files:
+            tree.insert("", "end", iid=path, values=(path, "\U0001F517 View diff"))
+
+        scrollbar = ttk.Scrollbar(container, orient="vertical", style="Slim.Vertical.TScrollbar", command=tree.yview)
+        tree.configure(yscrollcommand=scrollbar.set)
+        tree.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        def on_click(event: tk.Event) -> None:
+            if tree.identify_region(event.x, event.y) != "cell":
+                return
+            if tree.identify_column(event.x) != "#2":
+                return
+            path = tree.identify_row(event.y)
+            if path:
+                self._open_diff_vs_main(sha, path)
+
+        tree.bind("<Button-1>", on_click)
+
+    def _open_diff_vs_main(self, sha: str, path: str) -> None:
+        # GitLab anchors commit diffs by the SHA1 hex digest of the file path.
+        anchor = hashlib.sha1(path.encode("utf-8")).hexdigest()
+        url = f"{self.client.base_url}/{self.project_path}/-/commit/{sha}#diff-content-{anchor}"
         webbrowser.open(url)
 
     def _toggle_file_worker(self, path: str) -> None:
