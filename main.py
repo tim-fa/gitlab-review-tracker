@@ -19,7 +19,7 @@ import review_state_store
 from gitlab_client import GitLabClient, GitLabError, parse_project_url, get_gitlab_base_url_from_project_url
 from git_helper import show_changes_compared_to_main
 
-program_version = "v1.2.0"
+program_version = "v1.2.1"
 
 CONFIG_PATH = Path.home() / ".gitlab_review_tracker.json"
 REFRESH_INTERVAL_MS = int(os.environ.get("GRT_REFRESH_SECONDS", "30")) * 1000
@@ -75,12 +75,9 @@ class ReviewTrackerApp:
         self.reviewed_file_count_var = tk.StringVar(value="0")
 
         cfg = load_config()
+        self.status_var = tk.StringVar(value="Not connected. Enter a project URL and token to begin.")
         self._build_connection_bar(cfg)
         self._build_lists()
-        self.status_var = tk.StringVar(value="Not connected. Enter a project URL and token to begin.")
-        ttk.Label(root, textvariable=self.status_var, style="Status.TLabel", anchor="w").pack(
-            fill="x", padx=24, pady=(0, 12)
-        )
 
     def _configure_styles(self) -> None:
 
@@ -169,11 +166,15 @@ class ReviewTrackerApp:
         self.mr_display_var.set("Fetch MRs to load the list")
 
         self.progress = ttk.Progressbar(bar, mode="indeterminate")
-        self.progress.grid(row=3, column=0, columnspan=4, pady=(14, 0), sticky="we")
+        self.progress.grid(row=4, column=0, columnspan=3, pady=(6, 0), sticky="we")
         self.progress.grid_remove()
 
+        ttk.Label(bar, textvariable=self.status_var, style="Field.TLabel").grid(
+            row=3, column=0, columnspan=3, pady=(14, 0), sticky="w"
+        )
+
         bar.columnconfigure(1, weight=1)
-        ttk.Label(bar, textvariable=self.version_var, style="Muted.TLabel").grid(row=3, column=3, sticky="e", pady=(8, 0))
+        ttk.Label(bar, textvariable=self.version_var, style="Muted.TLabel").grid(row=3, column=3, sticky="e", pady=(14, 0))
 
     def _set_busy(self, busy: bool) -> None:
         self.fetch_button.configure(state="disabled" if busy else "normal")
@@ -497,6 +498,7 @@ class ReviewTrackerApp:
             messagebox.showinfo("No file paths", "No file paths are available for the selected commit.")
             return
 
+        self._set_busy(True)
         self.status_var.set("Comparing to main...")
         threading.Thread(
             target=self._compare_to_main_worker, args=(sha, older_sha, paths), daemon=True
@@ -517,6 +519,7 @@ class ReviewTrackerApp:
         self.root.after(0, lambda: self._on_compare_to_main_done(sha, diff_files))
 
     def _on_compare_to_main_done(self, sha: str, diff_files: list[str]) -> None:
+        self._set_busy(False)
         self.status_var.set(f"Signed in as {self.current_user}.")
         if not diff_files:
             messagebox.showinfo("No differences", "No differences compared to main.")
