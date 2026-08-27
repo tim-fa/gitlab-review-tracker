@@ -59,7 +59,7 @@ def merge_no_interaction(local_path: str, source_branch: str) -> None:
       source_branch (str): The name of the source branch to merge into the current branch.
    """
    print(f"[git_helper] Merging {source_branch} into {local_path}")
-   subprocess.run(["git", "-C", local_path, "merge", "--no-edit", source_branch], check=True)
+   subprocess.run(["git", "-C", local_path, "merge", "--no-edit", source_branch], check=False)
 
 def show_changes_compared_to_main(repo_url: str, commit_to_compare_sha: str, previous_commit_sha: str, files_of_commit: List[str]) -> List[str]:
    """
@@ -80,13 +80,13 @@ def show_changes_compared_to_main(repo_url: str, commit_to_compare_sha: str, pre
 
    print(f"[git_helper] Comparing {previous_commit_sha[:8]} -> {commit_to_compare_sha[:8]} ({len(files_of_commit)} file(s))")
 
-   clean_repo(base_repo)
    clone_or_update_repo(repo_url, base_repo)
+   clean_repo(base_repo)
    checkout_commit(base_repo, previous_commit_sha)
    merge_no_interaction(base_repo, "main")
 
-   clean_repo(compare_repo)
    clone_or_update_repo(repo_url, compare_repo)
+   clean_repo(compare_repo)
    checkout_commit(compare_repo, commit_to_compare_sha)
    merge_no_interaction(compare_repo, "main")
 
@@ -95,8 +95,9 @@ def show_changes_compared_to_main(repo_url: str, commit_to_compare_sha: str, pre
       base_file_path: str = os.path.join(base_repo, file_path)
       compare_file_path: str = os.path.join(compare_repo, file_path)
 
-      if not os.path.exists(base_file_path):
+      if not os.path.exists(base_file_path) or not os.path.exists(compare_file_path):
          diffs.append(file_path)
+         continue
 
       if not filecmp.cmp(base_file_path, compare_file_path, shallow=False):
          diffs.append(file_path)

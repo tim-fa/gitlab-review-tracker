@@ -19,7 +19,7 @@ import review_state_store
 from gitlab_client import GitLabClient, GitLabError, parse_project_url, get_gitlab_base_url_from_project_url
 from git_helper import show_changes_compared_to_main
 
-program_version = "v1.2.1"
+program_version = "v1.2.2"
 
 CONFIG_PATH = Path.home() / ".gitlab_review_tracker.json"
 REFRESH_INTERVAL_MS = int(os.environ.get("GRT_REFRESH_SECONDS", "30")) * 1000
