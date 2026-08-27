@@ -19,7 +19,7 @@ import review_state_store
 from gitlab_client import GitLabClient, GitLabError, parse_project_url, get_gitlab_base_url_from_project_url
 from git_helper import show_changes_compared_to_main
 
-program_version = "v1.2.2"
+program_version = "v1.2.3"
 
 CONFIG_PATH = Path.home() / ".gitlab_review_tracker.json"
 REFRESH_INTERVAL_MS = int(os.environ.get("GRT_REFRESH_SECONDS", "30")) * 1000
@@ -52,7 +52,7 @@ class ReviewTrackerApp:
     def __init__(self, root: tk.Tk):
         self.root = root
         root.title(f"GitLab Review Tracker ({program_version})")
-        root.geometry("1180x700")
+        root.geometry("1280x720")
         root.minsize(900, 560)
         root.configure(background="#f6f5f2")
         self._configure_styles()
@@ -221,10 +221,14 @@ class ReviewTrackerApp:
         self.commits_tree.bind("<Button-3>", self.on_commits_tree_right_click)
         self.files_tree.bind("<Double-1>", self.on_files_tree_double_click)
         self.files_tree.bind("<Button-1>", self.on_files_tree_click)
+        self.files_tree.bind("<Button-3>", self.on_files_tree_right_click)
 
         self.commits_context_menu = tk.Menu(self.root, tearoff=0)
         self.commits_context_menu.add_command(label="Mark as reviewed", command=lambda: self.on_toggle_commit())
         self.commits_context_menu.add_command(label="Show changes compared to main", command=self._compare_selected_commit_to_main)
+
+        self.files_context_menu = tk.Menu(self.root, tearoff=0)
+        self.files_context_menu.add_command(label="Mark as reviewed", command=lambda: self.on_toggle_file())
 
     def _metric_card(self, parent: ttk.Frame, label: str, variable: tk.StringVar, column: int) -> None:
         card = ttk.Frame(parent, style="Card.TFrame", padding=(12, 7))
@@ -452,7 +456,7 @@ class ReviewTrackerApp:
             return
         path = selection[0]
         self.status_var.set("Updating...")
-        threading.Thread(target=self._toggle_file_worker, args=(path,), daemon=True).start()
+        threading.Thread(target=self._toggle_file_worker, args=(self.active_commit_sha, path), daemon=True).start()
 
     def on_files_tree_double_click(self, event: tk.Event) -> None:
         if self.files_tree.identify_column(event.x) == "#3":
@@ -483,6 +487,13 @@ class ReviewTrackerApp:
             return
         self.commits_tree.selection_set(sha)
         self.commits_context_menu.tk_popup(event.x_root, event.y_root)
+
+    def on_files_tree_right_click(self, event: tk.Event) -> None:
+        path = self.files_tree.identify_row(event.y)
+        if not path:
+            return
+        self.files_tree.selection_set(path)
+        self.files_context_menu.tk_popup(event.x_root, event.y_root)
 
     def _compare_selected_commit_to_main(self) -> None:
         selection = self.commits_tree.selection()
@@ -539,29 +550,54 @@ class ReviewTrackerApp:
         container = ttk.Frame(window, style="Surface.TFrame")
         container.pack(fill="both", expand=True, padx=12, pady=(0, 12))
 
-        tree = ttk.Treeview(container, columns=("path", "open"), show="headings", selectmode="browse")
+        tree = ttk.Treeview(container, columns=("path", "reviewers", "open"), show="headings", selectmode="browse")
         tree.heading("path", text="File")
+        tree.heading("reviewers", text="Reviewed by")
         tree.heading("open", text="GitLab")
-        tree.column("path", width=460, stretch=True)
+        tree.column("path", width=360, stretch=True)
+        tree.column("reviewers", width=120, stretch=False)
         tree.column("open", width=100, stretch=False, anchor="center")
+        tree.tag_configure("reviewed", background="#dcfce7", foreground="#166534")
         for path in diff_files:
-            tree.insert("", "end", iid=path, values=(path, "\U0001F517 View diff"))
+            reviewers = self.state.get("files", {}).get(review_state_store.file_key(sha, path), [])
+            tags = ("reviewed",) if reviewers else ()
+            tree.insert("", "end", iid=path, values=(path, ", ".join(reviewers), "\U0001F517 View diff"), tags=tags)
 
         scrollbar = ttk.Scrollbar(container, orient="vertical", style="Slim.Vertical.TScrollbar", command=tree.yview)
         tree.configure(yscrollcommand=scrollbar.set)
         tree.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
 
+        diff_context_menu = tk.Menu(window, tearoff=0)
+        diff_context_menu.add_command(
+            label="Mark as reviewed", command=lambda: self._toggle_diff_file_reviewed(sha, tree)
+        )
+
         def on_click(event: tk.Event) -> None:
             if tree.identify_region(event.x, event.y) != "cell":
                 return
-            if tree.identify_column(event.x) != "#2":
+            if tree.identify_column(event.x) != "#3":
                 return
             path = tree.identify_row(event.y)
             if path:
                 self._open_diff_vs_main(sha, path)
 
+        def on_right_click(event: tk.Event) -> None:
+            path = tree.identify_row(event.y)
+            if not path:
+                return
+            tree.selection_set(path)
+            diff_context_menu.tk_popup(event.x_root, event.y_root)
+
         tree.bind("<Button-1>", on_click)
+        tree.bind("<Button-3>", on_right_click)
+
+    def _toggle_diff_file_reviewed(self, sha: str, tree: ttk.Treeview) -> None:
+        selection = tree.selection()
+        if not selection or not (self.project_path and self.mr_iid and self.current_user):
+            return
+        path = selection[0]
+        threading.Thread(target=self._toggle_file_worker, args=(sha, path, tree), daemon=True).start()
 
     def _open_diff_vs_main(self, sha: str, path: str) -> None:
         # GitLab anchors commit diffs by the SHA1 hex digest of the file path.
@@ -569,8 +605,7 @@ class ReviewTrackerApp:
         url = f"{self.client.base_url}/{self.project_path}/-/commit/{sha}#diff-content-{anchor}"
         webbrowser.open(url)
 
-    def _toggle_file_worker(self, path: str) -> None:
-        sha = self.active_commit_sha
+    def _toggle_file_worker(self, sha: str, path: str, tree: ttk.Treeview | None = None) -> None:
         try:
             key = review_state_store.file_key(sha, path)
             state = review_state_store.toggle(self.project_path, self.mr_iid, "files", key, self.current_user)
@@ -581,10 +616,14 @@ class ReviewTrackerApp:
             self.root.after(0, lambda: self._on_error(message))
             return
         self.state = state
-        self.root.after(0, lambda: self._on_file_toggled(sha, path))
+        self.root.after(0, lambda: self._on_file_toggled(sha, path, tree))
 
-    def _on_file_toggled(self, sha: str, path: str) -> None:
-        self._refresh_row(self.files_tree, path, "files", review_state_store.file_key(sha, path))
+    def _on_file_toggled(self, sha: str, path: str, tree: ttk.Treeview | None = None) -> None:
+        # ugly but keep for now
+        if tree is not None and tree.exists(path):
+            self._refresh_row(tree, path, "files", review_state_store.file_key(sha, path))
+        if self.files_tree.exists(path):
+            self._refresh_row(self.files_tree, path, "files", review_state_store.file_key(sha, path))
         self._refresh_row(self.commits_tree, sha, "commits", sha)
         self._update_metrics()
         self.status_var.set(f"Signed in as {self.current_user}.")
