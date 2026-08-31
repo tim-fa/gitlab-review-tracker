@@ -18,7 +18,7 @@ progress without requiring write access to GitLab.
 - Open a selected file's diff in the current merge request.
 - Detect merge commits and explain when they have no direct diff.
 - Refresh shared review state automatically every 30 seconds.
-- Cache the project URL and token locally for convenience.
+- Store the GitLab access token in a dedicated Settings window that can grow with future application settings.
 
 ## Requirements
 
@@ -46,8 +46,8 @@ To activate the environment in a new PowerShell session, run:
 
 ## Getting Started
 
-1. Enter the GitLab project URL, for example `https://gitlab.example.com/group/project/.
-2. Enter a Personal Access Token with the `read_api` scope.
+1. Open **Settings** and enter a Personal Access Token with the `read_api` scope.
+2. Enter the GitLab project URL, for example `https://gitlab.example.com/group/project/.
 3. Select **Fetch MRs**, then choose an open merge request.
 4. Select a commit to load its changed files.
 5. Double-click a commit or file row to toggle your review status. Reviewed

@@ -18,6 +18,7 @@ from tkinter import messagebox, ttk
 import review_state_store
 from gitlab_client import GitLabClient, GitLabError, parse_project_url, get_gitlab_base_url_from_project_url, get_ssh_url_from_project_url
 from git_helper import get_changes_compared_to_main
+from settings import SettingsDialog
 
 program_version = "v1.2.6"
 
@@ -74,13 +75,13 @@ class ReviewTrackerApp:
         self.file_count_var = tk.StringVar(value="0")
         self.reviewed_file_count_var = tk.StringVar(value="0")
 
-        cfg = load_config()
+        self.config = load_config()
         self.status_var = tk.StringVar(value="Not connected. Enter a project URL and token to begin.")
-        self._build_connection_bar(cfg)
+        self._build_connection_bar(self.config)
         self._build_lists()
 
         project_url = self.project_url_var.get().strip()
-        token = self.token_var.get().strip()
+        token = self.config.get("token", "").strip()
         if project_url and token:
             self.on_fetch_mrs()
 
@@ -131,6 +132,13 @@ class ReviewTrackerApp:
     def _build_connection_bar(self, cfg: dict) -> None:
         header = ttk.Frame(self.root, style="Header.TFrame", padding=(20, 14, 20, 12))
         header.pack(fill="x")
+        ttk.Button(
+            header,
+            text="\u2699 Settings",
+            width=14,
+            style="Secondary.TButton",
+            command=self.open_settings,
+        ).pack(side="right", anchor="n")
         ttk.Label(header, text="Review Tracker", style="Title.TLabel").pack(anchor="w")
         ttk.Label(header, text="Shared GitLab merge request review workspace", style="Subtitle.TLabel").pack(anchor="w", pady=(2, 10))
 
@@ -142,7 +150,6 @@ class ReviewTrackerApp:
         if current_project_url:
             self.project_url_history = add_to_history(self.project_url_history, current_project_url)
         self.project_url_var = tk.StringVar(value=current_project_url)
-        self.token_var = tk.StringVar(value=cfg.get("token", ""))
         self.mr_display_var = tk.StringVar(value="")
         self.version_var = tk.StringVar(value=program_version)
 
@@ -152,17 +159,11 @@ class ReviewTrackerApp:
         )
         self.project_url_combo.grid(row=0, column=1, padx=4, sticky="we")
 
-        ttk.Label(bar, text="Access token", style="Field.TLabel").grid(row=1, column=0, sticky="w")
-        ttk.Entry(bar, textvariable=self.token_var, width=30, show="*").grid(row=1, column=1, padx=4, pady=(4, 0), sticky="w")
         actions = ttk.Frame(bar, style="Surface.TFrame")
-        actions.grid(row=0, column=3, rowspan=2, padx=(8, 0), sticky="ne")
+        actions.grid(row=0, column=3, padx=(8, 0), sticky="ne")
 
         self.fetch_button = ttk.Button(actions, text="Fetch MRs", width=14, style="Accent.TButton", command=self.on_fetch_mrs)
-        self.fetch_button.pack(fill="x", pady=(0, 4))
-
-        ttk.Button(actions, text="Create token", width=14,
-                   style="Secondary.TButton",
-                   command=lambda: webbrowser.open(f"{get_gitlab_base_url_from_project_url(self.project_url_var.get())}/-/user_settings/personal_access_tokens")).pack(fill="x")
+        self.fetch_button.pack(fill="x")
 
         ttk.Label(bar, text="Merge request", style="Field.TLabel").grid(row=2, column=0, sticky="w", pady=(14, 0))
         self.mr_combo = ttk.Combobox(bar, textvariable=self.mr_display_var, state="disabled", width=70)
@@ -180,6 +181,13 @@ class ReviewTrackerApp:
 
         bar.columnconfigure(1, weight=1)
         ttk.Label(bar, textvariable=self.version_var, style="Muted.TLabel").grid(row=3, column=3, sticky="e", pady=(14, 0))
+
+    def open_settings(self) -> None:
+        SettingsDialog(self.root, self.config, self._save_settings)
+
+    def _save_settings(self, settings: dict) -> None:
+        self.config.update(settings)
+        save_config(self.config)
 
     def _set_busy(self, busy: bool) -> None:
         self.fetch_button.configure(state="disabled" if busy else "normal")
@@ -261,9 +269,9 @@ class ReviewTrackerApp:
 
     def on_fetch_mrs(self) -> None:
         project_url = self.project_url_var.get().strip()
-        token = self.token_var.get().strip()
+        token = self.config.get("token", "").strip()
         if not (project_url and token):
-            messagebox.showerror("Missing info", "Fill in the project URL and token.")
+            messagebox.showerror("Missing info", "Enter a project URL and add an access token in Settings.")
             return
 
         try:
@@ -274,7 +282,8 @@ class ReviewTrackerApp:
 
         self.project_url_history = add_to_history(self.project_url_history, project_url)
         self.project_url_combo["values"] = self.project_url_history
-        save_config({"project_url": project_url, "token": token, "project_url_history": self.project_url_history})
+        self.config.update({"project_url": project_url, "project_url_history": self.project_url_history})
+        save_config(self.config)
 
         if self._refresh_job is not None:
             self.root.after_cancel(self._refresh_job)
