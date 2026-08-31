@@ -76,7 +76,7 @@ def setup_repo_at_commit_merge_main(repo_url: str, commit_sha: str, local_path: 
    merge_no_interaction(local_path, "main")
 
 
-def get_changes_compared_to_main(repo_url: str, commit_to_compare_sha: str, previous_commit_sha: str, files_of_commit: List[str]) -> List[str]:
+def get_changes_compared_to_main(project_name: str, repo_url: str, commit_to_compare_sha: str, previous_commit_sha: str, files_of_commit: List[str]) -> List[str]:
    """
    Return the changes between a specific commit and the main branch.
    Two repos are checked out, one at the commit to compare and the other at the previous commit. 
@@ -89,13 +89,16 @@ def get_changes_compared_to_main(repo_url: str, commit_to_compare_sha: str, prev
       files_of_commit (List[str]): The list of relevant files to check for changes.
    """
    temp_appdata: str = os.getenv("TEMP")
-   temp_dir: str = os.path.join(temp_appdata, "git_helper_temp")
+   temp_dir: str = os.path.join(temp_appdata, "git_helper_temp", project_name)
    base_repo: str = os.path.join(temp_dir, "base_repo")
    compare_repo: str = os.path.join(temp_dir, "compare_repo")
 
+   if not os.path.exists(temp_dir):
+      os.makedirs(temp_dir, exist_ok=True)
+
    print(f"[git_helper] Comparing {previous_commit_sha[:8]} -> {commit_to_compare_sha[:8]} ({len(files_of_commit)} file(s))")
 
-   setup_repo_at_commit_merge_main(repo_url, previous_commit_sha, compare_repo)
+   setup_repo_at_commit_merge_main(repo_url, previous_commit_sha, base_repo)
    setup_repo_at_commit_merge_main(repo_url, commit_to_compare_sha, compare_repo)
 
    diffs: List[str] = []

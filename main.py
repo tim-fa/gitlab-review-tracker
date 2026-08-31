@@ -19,7 +19,7 @@ import review_state_store
 from gitlab_client import GitLabClient, GitLabError, parse_project_url, get_gitlab_base_url_from_project_url, get_ssh_url_from_project_url
 from git_helper import get_changes_compared_to_main
 
-program_version = "v1.2.5"
+program_version = "v1.2.6"
 
 CONFIG_PATH = Path.home() / ".gitlab_review_tracker.json"
 REFRESH_INTERVAL_MS = int(os.environ.get("GRT_REFRESH_SECONDS", "30")) * 1000
@@ -523,6 +523,7 @@ class ReviewTrackerApp:
     def _compare_to_main_worker(self, sha: str, older_sha: str, paths: list[str]) -> None:
         try:
             diff_files = get_changes_compared_to_main(
+                project_name=self.project_path.split("/")[-1],
                 repo_url=get_ssh_url_from_project_url(self.project_url_var.get()),
                 commit_to_compare_sha=sha,
                 previous_commit_sha=older_sha,
