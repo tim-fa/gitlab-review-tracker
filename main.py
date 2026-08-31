@@ -16,10 +16,10 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 import review_state_store
-from gitlab_client import GitLabClient, GitLabError, parse_project_url, get_gitlab_base_url_from_project_url
+from gitlab_client import GitLabClient, GitLabError, parse_project_url, get_gitlab_base_url_from_project_url, get_ssh_url_from_project_url
 from git_helper import show_changes_compared_to_main
 
-program_version = "v1.2.3"
+program_version = "v1.2.4"
 
 CONFIG_PATH = Path.home() / ".gitlab_review_tracker.json"
 REFRESH_INTERVAL_MS = int(os.environ.get("GRT_REFRESH_SECONDS", "30")) * 1000
@@ -243,7 +243,7 @@ class ReviewTrackerApp:
         tree = ttk.Treeview(container, columns=columns, show="headings", selectmode="browse")
         for col in columns:
             tree.heading(col, text=headings[col])
-            width = 72 if col == "sha" else 108 if col == "reviewers" else 92 if col == "author" else 180
+            width = 72 if col == "sha" else 50 if col == "reviewers" else 92 if col == "author" else 180
             tree.column(col, width=width, stretch=col != "sha")
         tree.tag_configure("reviewed", background="#dcfce7", foreground="#166534")
 
@@ -518,7 +518,7 @@ class ReviewTrackerApp:
     def _compare_to_main_worker(self, sha: str, older_sha: str, paths: list[str]) -> None:
         try:
             diff_files = show_changes_compared_to_main(
-                repo_url=self.project_url_var.get(),
+                repo_url=get_ssh_url_from_project_url(self.project_url_var.get()),
                 commit_to_compare_sha=sha,
                 previous_commit_sha=older_sha,
                 files_of_commit=paths,
@@ -555,7 +555,7 @@ class ReviewTrackerApp:
         tree.heading("reviewers", text="Reviewed by")
         tree.heading("open", text="GitLab")
         tree.column("path", width=360, stretch=True)
-        tree.column("reviewers", width=120, stretch=False)
+        tree.column("reviewers", width=50, stretch=False)
         tree.column("open", width=100, stretch=False, anchor="center")
         tree.tag_configure("reviewed", background="#dcfce7", foreground="#166534")
         for path in diff_files:

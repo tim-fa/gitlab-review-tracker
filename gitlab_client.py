@@ -39,6 +39,12 @@ def get_gitlab_base_url_from_project_url(project_url: str) -> str:
     base_url, _ = parse_project_url(project_url)
     return base_url
 
+def get_ssh_url_from_project_url(project_url: str) -> str:
+    """Build the SSH clone URL (git@host:group/project.git) from a project URL."""
+    base_url, project_path = parse_project_url(project_url)
+    host = urllib.parse.urlparse(base_url).netloc
+    return f"git@{host}:{project_path}.git"
+
 class GitLabClient:
     def __init__(self, base_url: str, token: str):
         self.base_url = base_url.rstrip("/")
