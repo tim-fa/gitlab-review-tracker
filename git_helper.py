@@ -61,9 +61,24 @@ def merge_no_interaction(local_path: str, source_branch: str) -> None:
    print(f"[git_helper] Merging {source_branch} into {local_path}")
    subprocess.run(["git", "-C", local_path, "merge", "--no-edit", source_branch], check=False)
 
-def show_changes_compared_to_main(repo_url: str, commit_to_compare_sha: str, previous_commit_sha: str, files_of_commit: List[str]) -> List[str]:
+def setup_repo_at_commit_merge_main(repo_url: str, commit_sha: str, local_path: str) -> None:
    """
-   Show the changes between a specific commit and the main branch.
+   Set up a repository at a specific commit and merge the main branch into it.
+
+   Args:
+      repo_url (str): The URL of the repository.
+      commit_sha (str): The SHA of the commit to checkout.
+      local_path (str): The local path where the repository should be set up.
+   """
+   clone_or_update_repo(repo_url, local_path)
+   clean_repo(local_path)
+   checkout_commit(local_path, commit_sha)
+   merge_no_interaction(local_path, "main")
+
+
+def get_changes_compared_to_main(repo_url: str, commit_to_compare_sha: str, previous_commit_sha: str, files_of_commit: List[str]) -> List[str]:
+   """
+   Return the changes between a specific commit and the main branch.
    Two repos are checked out, one at the commit to compare and the other at the previous commit. 
    The main branch is merged into both repos, and the files with differences are returned as a list of file paths.
 
@@ -80,15 +95,8 @@ def show_changes_compared_to_main(repo_url: str, commit_to_compare_sha: str, pre
 
    print(f"[git_helper] Comparing {previous_commit_sha[:8]} -> {commit_to_compare_sha[:8]} ({len(files_of_commit)} file(s))")
 
-   clone_or_update_repo(repo_url, base_repo)
-   clean_repo(base_repo)
-   checkout_commit(base_repo, previous_commit_sha)
-   merge_no_interaction(base_repo, "main")
-
-   clone_or_update_repo(repo_url, compare_repo)
-   clean_repo(compare_repo)
-   checkout_commit(compare_repo, commit_to_compare_sha)
-   merge_no_interaction(compare_repo, "main")
+   setup_repo_at_commit_merge_main(repo_url, previous_commit_sha, compare_repo)
+   setup_repo_at_commit_merge_main(repo_url, commit_to_compare_sha, compare_repo)
 
    diffs: List[str] = []
    for file_path in files_of_commit:

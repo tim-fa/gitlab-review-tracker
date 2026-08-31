@@ -17,7 +17,7 @@ from tkinter import messagebox, ttk
 
 import review_state_store
 from gitlab_client import GitLabClient, GitLabError, parse_project_url, get_gitlab_base_url_from_project_url, get_ssh_url_from_project_url
-from git_helper import show_changes_compared_to_main
+from git_helper import get_changes_compared_to_main
 
 program_version = "v1.2.5"
 
@@ -522,7 +522,7 @@ class ReviewTrackerApp:
 
     def _compare_to_main_worker(self, sha: str, older_sha: str, paths: list[str]) -> None:
         try:
-            diff_files = show_changes_compared_to_main(
+            diff_files = get_changes_compared_to_main(
                 repo_url=get_ssh_url_from_project_url(self.project_url_var.get()),
                 commit_to_compare_sha=sha,
                 previous_commit_sha=older_sha,
