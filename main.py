@@ -19,7 +19,7 @@ import review_state_store
 from gitlab_client import GitLabClient, GitLabError, parse_project_url, get_gitlab_base_url_from_project_url, get_ssh_url_from_project_url
 from git_helper import show_changes_compared_to_main
 
-program_version = "v1.2.4"
+program_version = "v1.2.5"
 
 CONFIG_PATH = Path.home() / ".gitlab_review_tracker.json"
 REFRESH_INTERVAL_MS = int(os.environ.get("GRT_REFRESH_SECONDS", "30")) * 1000
@@ -78,6 +78,11 @@ class ReviewTrackerApp:
         self.status_var = tk.StringVar(value="Not connected. Enter a project URL and token to begin.")
         self._build_connection_bar(cfg)
         self._build_lists()
+
+        project_url = self.project_url_var.get().strip()
+        token = self.token_var.get().strip()
+        if project_url and token:
+            self.on_fetch_mrs()
 
     def _configure_styles(self) -> None:
 
