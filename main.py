@@ -18,8 +18,8 @@ from tkinter import messagebox, ttk
 import review_state_store
 from gitlab_client import GitLabClient, GitLabError, parse_project_url, get_gitlab_base_url_from_project_url, get_ssh_url_from_project_url
 from git_helper import get_changes_compared_to_main
-from commit_range_dialog import pick_commit_range
-from settings import SettingsDialog
+from ui_commit_range_dialog import pick_commit_range
+from ui_settings import SettingsDialog
 
 DEFAULT_BEYOND_COMPARE_PATH = r"C:\Program Files\Beyond Compare 4\BCompare.exe"
 

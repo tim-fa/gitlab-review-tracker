@@ -9,6 +9,7 @@ from __future__ import annotations
 import tkinter as tk
 from collections.abc import Callable
 from tkinter import ttk
+import tk_util
 
 class SettingsDialog:
    """Modal editor for locally stored application settings."""
@@ -32,7 +33,7 @@ class SettingsDialog:
             )
 
       self._build_fields()
-      self._position_over_parent(parent)
+      tk_util.position_over_parent(self, parent, self.window)
       self.window.grab_set()
       self.window.focus_set()
 

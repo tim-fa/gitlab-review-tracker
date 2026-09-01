@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import tkinter as tk
 from tkinter import ttk
+import tk_util
 
 VALID_FG = "#292e30"
 DISABLED_FG = "#b9b6ad"
@@ -58,7 +59,7 @@ class CommitRangeDialog:
         ttk.Button(actions, text="Cancel", style="Secondary.TButton", command=self._cancel).pack(side="left", padx=(0, 6))
         ttk.Button(actions, text="OK", style="Accent.TButton", command=self._ok).pack(side="left")
 
-        self._position_over_parent(parent)
+        tk_util.position_over_parent(self, parent, self.window)
         self.window.grab_set()
         self.window.focus_set()
         self.window.wait_window()
@@ -97,12 +98,6 @@ class CommitRangeDialog:
     def _format(commit: dict, index: int, last_index: int) -> str:
         marker = " (oldest)" if index == 0 else " (newest)" if index == last_index else ""
         return f"{index + 1:>3}. {commit['id'][:8]}  {commit.get('title', '')}{marker}"
-
-    def _position_over_parent(self, parent: tk.Misc) -> None:
-        self.window.update_idletasks()
-        x = parent.winfo_rootx() + (parent.winfo_width() - self.window.winfo_width()) // 2
-        y = parent.winfo_rooty() + (parent.winfo_height() - self.window.winfo_height()) // 2
-        self.window.geometry(f"+{max(0, x)}+{max(0, y)}")
 
     def _selected_index(self, listbox: tk.Listbox, fallback: int) -> int:
         selection = listbox.curselection()
