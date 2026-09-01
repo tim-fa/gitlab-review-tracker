@@ -18,7 +18,10 @@ from tkinter import messagebox, ttk
 import review_state_store
 from gitlab_client import GitLabClient, GitLabError, parse_project_url, get_gitlab_base_url_from_project_url, get_ssh_url_from_project_url
 from git_helper import get_changes_compared_to_main
+from commit_range_dialog import pick_commit_range
 from settings import SettingsDialog
+
+DEFAULT_BEYOND_COMPARE_PATH = r"C:\Program Files\Beyond Compare 4\BCompare.exe"
 
 program_version = "v1.2.6"
 
@@ -70,12 +73,14 @@ class ReviewTrackerApp:
         self._refresh_job: str | None = None
         self.all_mrs: list[dict] = []
         self.mr_by_display: dict[str, dict] = {}
+        self.current_commits: list[dict] = []
         self.commit_count_var = tk.StringVar(value="0")
         self.reviewed_commit_count_var = tk.StringVar(value="0")
         self.file_count_var = tk.StringVar(value="0")
         self.reviewed_file_count_var = tk.StringVar(value="0")
 
         self.config = load_config()
+        self.config.setdefault("beyond_compare_path", DEFAULT_BEYOND_COMPARE_PATH)
         self.status_var = tk.StringVar(value="Not connected. Enter a project URL and token to begin.")
         self._build_connection_bar(self.config)
         self._build_lists()
@@ -208,6 +213,15 @@ class ReviewTrackerApp:
         self._metric_card(metrics, "Reviewed files", self.reviewed_file_count_var, 3)
         for column in range(4):
             metrics.columnconfigure(column, weight=1)
+
+        toolbar = ttk.Frame(self.root, style="Surface.TFrame")
+        toolbar.pack(fill="x", padx=20, pady=(0, 10))
+        self.beyond_compare_button = ttk.Button(
+            toolbar,
+            text="Open Diff in Beyond Compare",
+            style="Secondary.TButton",
+            command=self.on_open_beyond_compare,
+        )
 
         paned = ttk.PanedWindow(self.root, orient="horizontal")
         paned.pack(fill="both", expand=True, padx=20, pady=(0, 10))
@@ -343,6 +357,7 @@ class ReviewTrackerApp:
 
         self._set_busy(True)
         self.status_var.set(f"Loading !{mr_iid}...")
+        self.beyond_compare_button.pack_forget()
         threading.Thread(target=self._load_worker, args=(mr_iid,), daemon=True).start()
 
     def _load_worker(self, mr_iid: int) -> None:
@@ -358,12 +373,45 @@ class ReviewTrackerApp:
         self.state = state
         self.commit_files_cache = {}
         self.active_commit_sha = None
+        self.current_commits = commits
         self.root.after(0, lambda: self._populate(commits))
 
     def _on_error(self, message: str) -> None:
         self._set_busy(False)
         self.status_var.set("Error.")
         messagebox.showerror(f"GitLab Review Tracker", message)
+
+    def on_open_beyond_compare(self) -> None:
+        if not (self.client and self.project_path and self.current_commits):
+            return
+        result = pick_commit_range(self.root, self.current_commits)
+        if not result:
+            return
+        first_sha, last_sha = result
+        print(result)
+        beyond_compare_path = self.config.get("beyond_compare_path", "").strip()
+        if not beyond_compare_path:
+            messagebox.showerror("Beyond Compare", "Set the Beyond Compare executable path in Settings first.")
+            return
+
+        self._set_busy(True)
+        self.status_var.set("Preparing Beyond Compare diff...")
+        threading.Thread(
+            target=self._open_beyond_compare_worker, args=(first_sha, last_sha, beyond_compare_path), daemon=True
+        ).start()
+
+    def _open_beyond_compare_worker(self, first_sha: str, last_sha: str, beyond_compare_path: str) -> None:
+        try:
+            pass # TODO: Implement Beyond Compare diff logic here
+        except Exception as exc:  # noqa: BLE001 - surface any failure to the UI
+            message = str(exc)
+            self.root.after(0, lambda: self._on_error(message))
+            return
+        self.root.after(0, self._on_beyond_compare_done)
+
+    def _on_beyond_compare_done(self) -> None:
+        self._set_busy(False)
+        self.status_var.set(f"Signed in as {self.current_user}.")
 
     def _populate(self, commits: list[dict]) -> None:
         self.commits_tree.delete(*self.commits_tree.get_children())
@@ -390,6 +438,8 @@ class ReviewTrackerApp:
         self.reviewed_file_count_var.set("0")
         self._set_busy(False)
         self.status_var.set(f"Loaded as {self.current_user}. {len(commits)} commits.")
+        # TODO: Enable Beyond Compare button once implemented
+        # self.beyond_compare_button.pack(side="right")
         self._schedule_refresh()
 
     def _populate_files(self, sha: str, paths: list[str]) -> None:
