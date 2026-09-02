@@ -1,5 +1,6 @@
 import shutil
 import subprocess
+import threading
 
 import git_helper
 import filecmp
@@ -129,4 +130,5 @@ def open_diff_in_beyond_compare(project_name: str, repo_url: str, commit_to_comp
          os.makedirs(os.path.dirname(new_file_path), exist_ok=True)
          shutil.copy2(compare_file_path, new_file_path)
 
-   subprocess.run([beyond_compare_path, old_temp_dir, new_temp_dir], check=False)
+   threading.Thread(target=lambda: subprocess.run([beyond_compare_path, old_temp_dir, new_temp_dir], check=False), daemon=True).start()
+   
