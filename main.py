@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import threading
 import tkinter as tk
 import webbrowser
@@ -27,7 +26,7 @@ DEFAULT_BEYOND_COMPARE_PATH = r"C:\Program Files\Beyond Compare 4\BCompare.exe"
 program_version = "v1.3.1"
 
 CONFIG_PATH = Path.home() / ".gitlab_review_tracker.json"
-REFRESH_INTERVAL_MS = int(os.environ.get("GRT_REFRESH_SECONDS", "30")) * 1000
+DEFAULT_REFRESH_INTERVAL_SECONDS = 30
 MAX_PROJECT_HISTORY = 15
 
 
@@ -82,6 +81,7 @@ class ReviewTrackerApp:
 
         self.config = load_config()
         self.config.setdefault("beyond_compare_path", DEFAULT_BEYOND_COMPARE_PATH)
+        self.config.setdefault("refresh_interval_seconds", str(DEFAULT_REFRESH_INTERVAL_SECONDS))
         self.status_var = tk.StringVar(value="Not connected. Enter a project URL and token to begin.")
         self._build_connection_bar(self.config)
         self._build_lists()
@@ -194,6 +194,8 @@ class ReviewTrackerApp:
     def _save_settings(self, settings: dict) -> None:
         self.config.update(settings)
         save_config(self.config)
+        if self.project_path and self.mr_iid:
+            self._schedule_refresh()
 
     def _set_busy(self, busy: bool) -> None:
         self.fetch_button.configure(state="disabled" if busy else "normal")
@@ -711,7 +713,11 @@ class ReviewTrackerApp:
     def _schedule_refresh(self) -> None:
         if self._refresh_job is not None:
             self.root.after_cancel(self._refresh_job)
-        self._refresh_job = self.root.after(REFRESH_INTERVAL_MS, self._auto_refresh)
+        try:
+            interval_seconds = max(1, int(self.config.get("refresh_interval_seconds", DEFAULT_REFRESH_INTERVAL_SECONDS)))
+        except (TypeError, ValueError):
+            interval_seconds = DEFAULT_REFRESH_INTERVAL_SECONDS
+        self._refresh_job = self.root.after(interval_seconds * 1000, self._auto_refresh)
 
     def _auto_refresh(self) -> None:
         if not (self.project_path and self.mr_iid):

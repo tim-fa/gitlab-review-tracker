@@ -91,12 +91,13 @@ JSON documents. Concurrent updates use last-write-wins semantics.
 
 ## Configuration and Security
 
-The following environment variable changes the refresh interval:
+The refresh interval is configured in the Settings window. Set
+`refresh interval seconds` to the number of seconds between shared-state
+refreshes; values below one second are treated as one second.
 
 | Variable | Default | Description |
 | --- | ---: | --- |
 | `GRT_STATE_ROOT` | The shared network path above | Root directory for review-state files |
-| `GRT_REFRESH_SECONDS` | `30` | Seconds between shared-state refreshes |
 
 The project URL and token are cached in
 `%USERPROFILE%\.gitlab_review_tracker.json` as plain text. Protect this file
