@@ -15,6 +15,7 @@ import webbrowser
 from pathlib import Path
 from tkinter import messagebox, ttk
 
+import git_helper
 import review_state_store
 from gitlab_client import GitLabClient, GitLabError, parse_project_url, get_gitlab_base_url_from_project_url, get_ssh_url_from_project_url
 from git_helper import get_changes_compared_to_main
@@ -23,7 +24,7 @@ from ui_settings import SettingsDialog
 
 DEFAULT_BEYOND_COMPARE_PATH = r"C:\Program Files\Beyond Compare 4\BCompare.exe"
 
-program_version = "v1.2.6"
+program_version = "v1.2.7"
 
 CONFIG_PATH = Path.home() / ".gitlab_review_tracker.json"
 REFRESH_INTERVAL_MS = int(os.environ.get("GRT_REFRESH_SECONDS", "30")) * 1000
@@ -402,7 +403,8 @@ class ReviewTrackerApp:
 
     def _open_beyond_compare_worker(self, first_sha: str, last_sha: str, beyond_compare_path: str) -> None:
         try:
-            pass # TODO: Implement Beyond Compare diff logic here
+           # todo
+           pass
         except Exception as exc:  # noqa: BLE001 - surface any failure to the UI
             message = str(exc)
             self.root.after(0, lambda: self._on_error(message))
@@ -564,29 +566,19 @@ class ReviewTrackerApp:
         if not selection or not (self.client and self.project_path):
             return
         sha = selection[0]
-        older_sha = self.commits_tree.next(sha)
-        if not older_sha:
-            messagebox.showinfo("No previous commit", "This is the oldest commit in the list; there is no previous commit to compare against.")
-            return
-        paths = self.commit_files_cache.get(sha)
-        if paths is None:
-            messagebox.showinfo("No file paths", "No file paths are available for the selected commit.")
-            return
-
         self._set_busy(True)
         self.status_var.set("Comparing to main...")
         threading.Thread(
-            target=self._compare_to_main_worker, args=(sha, older_sha, paths), daemon=True
+            target=self._compare_to_main_worker, args=(sha,), daemon=True
         ).start()
 
-    def _compare_to_main_worker(self, sha: str, older_sha: str, paths: list[str]) -> None:
+    def _compare_to_main_worker(self, sha: str) -> None:
         try:
-            diff_files = get_changes_compared_to_main(
+            diff_files, _, _ = get_changes_compared_to_main(
                 project_name=self.project_path.split("/")[-1],
                 repo_url=get_ssh_url_from_project_url(self.project_url_var.get()),
                 commit_to_compare_sha=sha,
-                previous_commit_sha=older_sha,
-                files_of_commit=paths,
+                previous_commit_sha=sha
             )
         except Exception as exc:  # noqa: BLE001 - surface any failure to the UI
             message = str(exc)
