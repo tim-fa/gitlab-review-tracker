@@ -18,13 +18,13 @@ from tkinter import messagebox, ttk
 import git_helper
 import review_state_store
 from gitlab_client import GitLabClient, GitLabError, parse_project_url, get_gitlab_base_url_from_project_url, get_ssh_url_from_project_url
-from git_helper import get_changes_compared_to_main
+import commit_comparator
 from ui_commit_range_dialog import pick_commit_range
 from ui_settings import SettingsDialog
 
 DEFAULT_BEYOND_COMPARE_PATH = r"C:\Program Files\Beyond Compare 4\BCompare.exe"
 
-program_version = "v1.2.7"
+program_version = "v1.3.0"
 
 CONFIG_PATH = Path.home() / ".gitlab_review_tracker.json"
 REFRESH_INTERVAL_MS = int(os.environ.get("GRT_REFRESH_SECONDS", "30")) * 1000
@@ -403,8 +403,13 @@ class ReviewTrackerApp:
 
     def _open_beyond_compare_worker(self, first_sha: str, last_sha: str, beyond_compare_path: str) -> None:
         try:
-           # todo
-           pass
+           commit_comparator.open_diff_in_beyond_compare(
+                project_name=self.project_path.split("/")[-1],
+                repo_url=get_ssh_url_from_project_url(self.project_url_var.get()),
+               commit_to_compare_sha=last_sha,
+               previous_commit_sha=first_sha,
+               beyond_compare_path=beyond_compare_path,
+           )
         except Exception as exc:  # noqa: BLE001 - surface any failure to the UI
             message = str(exc)
             self.root.after(0, lambda: self._on_error(message))
@@ -440,8 +445,7 @@ class ReviewTrackerApp:
         self.reviewed_file_count_var.set("0")
         self._set_busy(False)
         self.status_var.set(f"Loaded as {self.current_user}. {len(commits)} commits.")
-        # TODO: Enable Beyond Compare button once implemented
-        # self.beyond_compare_button.pack(side="right")
+        self.beyond_compare_button.pack(side="right")
         self._schedule_refresh()
 
     def _populate_files(self, sha: str, paths: list[str]) -> None:
@@ -574,7 +578,7 @@ class ReviewTrackerApp:
 
     def _compare_to_main_worker(self, sha: str) -> None:
         try:
-            diff_files, _, _ = get_changes_compared_to_main(
+            diff_files, _, _ = commit_comparator.get_changes_compared_to_main(
                 project_name=self.project_path.split("/")[-1],
                 repo_url=get_ssh_url_from_project_url(self.project_url_var.get()),
                 commit_to_compare_sha=sha,

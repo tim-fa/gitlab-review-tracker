@@ -1,7 +1,6 @@
-import filecmp
 import os
 import subprocess
-from typing import List, Tuple
+from typing import List
 
 def clean_repo(local_path: str) -> None:
    """
@@ -151,67 +150,3 @@ def get_commit_before(commit_sha: str, local_path: str) -> str:
    )
    commits = result.stdout.strip().split()
    return commits[1] if len(commits) > 1 else ""
-
-def get_changes_compared_to_main(project_name: str, repo_url: str, commit_to_compare_sha: str, previous_commit_sha: str) -> Tuple[List[str], str, str]:
-   """
-   Return the changes between a specific commit and the main branch.
-   Two repos are checked out, one at the commit to compare and the other at the previous commit. 
-   The main branch is merged into both repos, and the files with differences are returned as a list of file paths.
-
-   Args:
-      project_name (str): The name of the project.
-      repo_url (str): The URL of the repository.
-      commit_to_compare_sha (str): The SHA of the commit to compare.
-      previous_commit_sha (str): The SHA of the previous commit to compare against.
-      files_of_commit (List[str]): The list of relevant files to check for changes.
-
-   Returns:
-      Tuple[List[str], str, str]: A tuple containing the list of differing files, the base commit SHA, and the compare commit SHA.
-   """
-   temp_appdata: str = os.getenv("TEMP")
-   temp_dir: str = os.path.join(temp_appdata, "git_helper_temp", project_name)
-   base_repo: str = os.path.join(temp_dir, "base_repo")
-   compare_repo: str = os.path.join(temp_dir, "compare_repo")
-
-   if not os.path.exists(temp_dir):
-      os.makedirs(temp_dir, exist_ok=True)
-
-   print(f"[git_helper] Comparing {previous_commit_sha[:8]} -> {commit_to_compare_sha[:8]}")
-
-   if previous_commit_sha == commit_to_compare_sha:
-      print(f"[git_helper] Showing changes of single commit")
-      setup_repo_at_commit_merge_main(repo_url, commit_to_compare_sha, compare_repo)
-      commit_before = get_commit_before(commit_to_compare_sha, compare_repo)
-      if not commit_before:
-         raise ValueError(f"Could not determine the commit before {commit_to_compare_sha}")
-      setup_repo_at_commit_merge_main(repo_url, commit_before, base_repo)
-      print(f"[git_helper] Base repo set up at commit {commit_before[:8]} and compare repo at commit {commit_to_compare_sha[:8]}")
-   else:
-      print(f"[git_helper] Showing changes between commits")
-      setup_repo_at_commit_merge_main(repo_url, previous_commit_sha, base_repo)
-      setup_repo_at_commit_merge_main(repo_url, commit_to_compare_sha, compare_repo)
-      print(f"[git_helper] Base repo set up at commit {previous_commit_sha[:8]} and compare repo at commit {commit_to_compare_sha[:8]}")
-
-   all_files = set()
-   print(f"[git_helper] Gathering all files between {previous_commit_sha[:8]} and {commit_to_compare_sha[:8]}")
-   for commit_sha in get_all_commit_hashes_between(previous_commit_sha, commit_to_compare_sha, compare_repo):
-      print(f"[git_helper] Found intermediate commit {commit_sha[:8]}")
-      all_files.update(get_files_of_commit(commit_sha, compare_repo))
-
-   if not all_files:
-      raise ValueError(f"No files found between {previous_commit_sha[:8]} and {commit_to_compare_sha[:8]}")
-
-   diffs: List[str] = []
-   for file_path in all_files:
-      base_file_path: str = os.path.join(base_repo, file_path)
-      compare_file_path: str = os.path.join(compare_repo, file_path)
-
-      if not os.path.exists(base_file_path) or not os.path.exists(compare_file_path):
-         diffs.append(file_path)
-         continue
-
-      if not filecmp.cmp(base_file_path, compare_file_path, shallow=False):
-         diffs.append(file_path)
-
-   print(f"[git_helper] Found {len(diffs)} differing file(s)")
-   return diffs, base_repo, compare_repo
