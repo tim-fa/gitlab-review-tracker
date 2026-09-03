@@ -1,7 +1,7 @@
 {
    "app_title": "GitLab Review Tracker ({version})",
    "b_settings": "\u2699 Settings",
-   "b_fetch_mrs": "Fetch MRs",
+   "b_refresh": "\u21bb",
    "b_open_beyond_compare": "Open Diff in Beyond Compare",
    "b_open_mr_in_gitlab": "Open MR in GitLab",
    "b_cancel": "Cancel",

@@ -17,14 +17,21 @@ progress without requiring write access to GitLab.
 - Derive a commit's reviewers from reviewers of all of its files.
 - Open a selected file's diff in the current merge request.
 - Detect merge commits and explain when they have no direct diff.
+- Right-click a commit to see which files still differ from `main`.
+- Use the toolbar, to open a range of commits as a
+  diff in Beyond Compare (clones/updates the repo locally via `git`).
 - Refresh shared review state automatically every 30 seconds.
-- Store the GitLab access token in a dedicated Settings window that can grow with future application settings.
+- Store the GitLab access token and other local settings in a dedicated
+  Settings window that can grow with future application settings.
 
 ## Requirements
 
 - Windows
 - Python 3.10 or later
 - Tkinter, usually included with the standard Windows Python installer
+- Git on `PATH`, and SSH access to the GitLab instance, for the "Compare to
+  main" and "Open Diff in Beyond Compare" features
+- Beyond Compare 4, if using the Beyond Compare diff feature
 - Network access to the GitLab instance and the shared review-state directory
 
 ## Installation
@@ -46,14 +53,21 @@ To activate the environment in a new PowerShell session, run:
 
 ## Getting Started
 
-1. Open **Settings** and enter a Personal Access Token with the `read_api` scope.
-2. Enter the GitLab project URL, for example `https://gitlab.example.com/group/project/.
-3. Select **Fetch MRs**, then choose an open merge request.
+1. Open **⚙ Settings** and enter a Personal Access Token with the `read_api`
+   scope. This is also where you set the Beyond Compare executable path and
+   the shared-state refresh interval.
+2. Enter the GitLab project URL, for example `https://gitlab.example.com/group/project`.
+3. Select the refresh icon (⟳) next to the project URL to fetch merge
+   requests, then choose an open merge request.
 4. Select a commit to load its changed files.
 5. Double-click a commit or file row to toggle your review status. Reviewed
    rows are highlighted and list the reviewers' GitLab usernames.
 6. Select **View diff** in a file row to open that file's merge request diff in
    the default browser.
+7. Right-click a commit for extra actions: mark as reviewed, or show changes
+   compared to `main`.
+8. Use **Open Diff in Beyond Compare** to pick a commit range and open the
+   combined diff for that range in Beyond Compare.
 
 Selecting a commit loads its file list on demand. File lists are cached in
 memory for the current session. The review state is re-read from shared
@@ -91,15 +105,21 @@ JSON documents. Concurrent updates use last-write-wins semantics.
 
 ## Configuration and Security
 
-The refresh interval is configured in the Settings window. Set
-`refresh interval seconds` to the number of seconds between shared-state
-refreshes; values below one second are treated as one second.
+Application settings are edited in the **Settings** window and are persisted
+locally:
 
-| Variable | Default | Description |
-| --- | ---: | --- |
+| Setting | Default | Description |
+| --- | --- | --- |
+| Token | (empty) | GitLab Personal Access Token, used for read-only API calls |
+| Project url | (empty) | Last-used GitLab project URL |
+| Beyond compare path | `C:\Program Files\Beyond Compare 4\BCompare.exe` | Path to the Beyond Compare executable |
+| Refresh interval seconds | `30` | Seconds between shared review-state refreshes; values below one second are treated as one second |
+
+| Environment variable | Default | Description |
+| --- | --- | --- |
 | `GRT_STATE_ROOT` | The shared network path above | Root directory for review-state files |
 
-The project URL and token are cached in
+The project URL, token, and other settings are cached in
 `%USERPROFILE%\.gitlab_review_tracker.json` as plain text. Protect this file
 like a credential, or remove it when the token should no longer be cached.
 Use a token with only `read_api`; the application does not call GitLab write
@@ -118,6 +138,11 @@ The client uses these read-only GitLab REST API resources:
 For very large commits, GitLab may return more changes than the current
 per-page limit. The client currently requests up to 100 results per endpoint.
 
+The "Compare to main" and "Open Diff in Beyond Compare" features work outside
+the GitLab API: they clone or update a local copy of the repository over SSH
+and run `git` commands directly, so they require Git and SSH access rather
+than API access.
+
 ## Known Limitations
 
 - The application currently targets Windows and uses Tkinter for its UI.
@@ -128,6 +153,8 @@ per-page limit. The client currently requests up to 100 results per endpoint.
   scroll directly to the selected file.
 - The token cache is intentionally simple and does not use the operating
   system credential store.
+- The Beyond Compare and "compare to main" features require a local clone of
+  the repository (via SSH) and a working `git` executable on `PATH`.
 
 ## Project Structure
 
@@ -136,4 +163,11 @@ per-page limit. The client currently requests up to 100 results per endpoint.
 | `main.py` | Tkinter application and review workflow |
 | `gitlab_client.py` | Read-only GitLab REST API client |
 | `review_state_store.py` | Shared JSON review-state management |
+| `commit_comparator.py` | Local git-based diff comparisons (Beyond Compare, compare-to-main) |
+| `git_helper.py` | Thin wrapper around `git` CLI commands (clone, fetch, checkout, clean) |
+| `ui_commit_range_dialog.py` | Modal dialog for picking a commit range to compare |
+| `ui_settings.py` | Settings window for token, paths, and refresh interval |
+| `naming_interface.py` | Loads UI text/labels from `constants.json` |
+| `constants.json` | UI text, labels, and messages used by `naming_interface.py` |
+| `tk_util.py` | Small Tkinter helper utilities (e.g. window positioning) |
 | `requirements.txt` | Python dependencies |

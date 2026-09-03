@@ -167,14 +167,14 @@ class ReviewTrackerApp:
         self.project_url_combo = ttk.Combobox(
             bar, textvariable=self.project_url_var, values=self.project_url_history, width=52
         )
-        self.project_url_combo.grid(row=0, column=1, padx=4, sticky="we")
+        self.project_url_combo.grid(row=0, column=1, padx=(0, 4), sticky="we")
         self.project_url_combo.bind("<<ComboboxSelected>>", self.on_project_url_selected)
 
         actions = ttk.Frame(bar, style="Surface.TFrame")
         actions.grid(row=0, column=3, padx=(8, 0), sticky="ne")
 
-        self.fetch_button = ttk.Button(actions, text=naming_interface.get_attr("b_fetch_mrs"), width=14, style="Accent.TButton", command=self.on_fetch_mrs)
-        self.fetch_button.pack(fill="x")
+        self.fetch_button = ttk.Button(actions, text=naming_interface.get_attr("b_refresh"), width=3, style="Accent.TButton", command=self.on_fetch_mrs)
+        self.fetch_button.pack()
 
         ttk.Label(bar, text=naming_interface.get_attr("l_merge_request"), style="Field.TLabel").grid(row=2, column=0, sticky="w", pady=(14, 0))
         self.mr_combo = ttk.Combobox(bar, textvariable=self.mr_display_var, state="disabled", width=70)
