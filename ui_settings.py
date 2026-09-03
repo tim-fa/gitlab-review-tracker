@@ -10,6 +10,9 @@ import tkinter as tk
 from collections.abc import Callable
 from tkinter import ttk
 import tk_util
+from naming_interface import NamingInterface
+
+naming_interface = NamingInterface()
 
 class SettingsDialog:
    """Modal editor for locally stored application settings."""
@@ -17,7 +20,7 @@ class SettingsDialog:
    def __init__(self, parent: tk.Tk, config: dict, on_save: Callable[[dict], None]) -> None:
       self._on_save = on_save
       self.window = tk.Toplevel(parent)
-      self.window.title("Settings")
+      self.window.title(naming_interface.get_attr("t_settings"))
       self.window.transient(parent)
       self.window.resizable(False, False)
       self.window.configure(background="#f6f5f2")
@@ -29,7 +32,7 @@ class SettingsDialog:
       for key, value in config.items():
          if isinstance(value, str):
             self.fields.append(
-               (key, key.replace("_", " ").capitalize(), tk.StringVar(value=value), key == "token", "\n" in value)
+               (key, naming_interface.get_attr(f"l_settings_{key}"), tk.StringVar(value=value), key == "token", "\n" in value)
             )
 
       self._build_fields()
@@ -41,8 +44,8 @@ class SettingsDialog:
       content = ttk.Frame(self.window, style="Surface.TFrame", padding=20)
       content.pack(fill="both", expand=True, padx=16, pady=16)
 
-      ttk.Label(content, text="GitLab", style="Title.TLabel").grid(row=0, column=0, sticky="w")
-      ttk.Label(content, text="Connection settings", style="Subtitle.TLabel").grid(
+      ttk.Label(content, text=naming_interface.get_attr("l_gitlab"), style="Title.TLabel").grid(row=0, column=0, sticky="w")
+      ttk.Label(content, text=naming_interface.get_attr("l_connection_settings"), style="Subtitle.TLabel").grid(
          row=1, column=0, sticky="w", pady=(2, 16)
       )
 
@@ -68,10 +71,10 @@ class SettingsDialog:
 
       actions = ttk.Frame(content, style="Surface.TFrame")
       actions.grid(row=row, column=0, sticky="e", pady=(8, 0))
-      ttk.Button(actions, text="Cancel", style="Secondary.TButton", command=self.window.destroy).pack(
+      ttk.Button(actions, text=naming_interface.get_attr("b_cancel"), style="Secondary.TButton", command=self.window.destroy).pack(
          side="left", padx=(0, 6)
       )
-      ttk.Button(actions, text="Save", style="Accent.TButton", command=self._save).pack(side="left")
+      ttk.Button(actions, text=naming_interface.get_attr("b_save"), style="Accent.TButton", command=self._save).pack(side="left")
 
       content.columnconfigure(0, weight=1)
       self.window.bind("<Return>", lambda _event: self._save())

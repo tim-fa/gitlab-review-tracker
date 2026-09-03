@@ -20,6 +20,9 @@ from gitlab_client import GitLabClient, GitLabError, parse_project_url, get_gitl
 import commit_comparator
 from ui_commit_range_dialog import pick_commit_range
 from ui_settings import SettingsDialog
+from naming_interface import NamingInterface
+
+naming_interface = NamingInterface()
 
 DEFAULT_BEYOND_COMPARE_PATH = r"C:\Program Files\Beyond Compare 4\BCompare.exe"
 
@@ -55,7 +58,7 @@ def save_config(cfg: dict) -> None:
 class ReviewTrackerApp:
     def __init__(self, root: tk.Tk):
         self.root = root
-        root.title(f"GitLab Review Tracker ({program_version})")
+        root.title(naming_interface.get_attr("app_title").format(version=program_version))
         root.geometry("1280x720")
         root.minsize(900, 560)
         root.configure(background="#f6f5f2")
@@ -83,7 +86,7 @@ class ReviewTrackerApp:
         self.config = load_config()
         self.config.setdefault("beyond_compare_path", DEFAULT_BEYOND_COMPARE_PATH)
         self.config.setdefault("refresh_interval_seconds", str(DEFAULT_REFRESH_INTERVAL_SECONDS))
-        self.status_var = tk.StringVar(value="Not connected. Enter a project URL and token to begin.")
+        self.status_var = tk.StringVar(value=naming_interface.get_attr("v_status_not_connected"))
         self._build_connection_bar(self.config)
         self._build_lists()
 
@@ -141,13 +144,13 @@ class ReviewTrackerApp:
         header.pack(fill="x")
         ttk.Button(
             header,
-            text="\u2699 Settings",
+            text=naming_interface.get_attr("b_settings"),
             width=14,
             style="Secondary.TButton",
             command=self.open_settings,
         ).pack(side="right", anchor="n")
-        ttk.Label(header, text="Review Tracker", style="Title.TLabel").pack(anchor="w")
-        ttk.Label(header, text="Shared GitLab merge request review workspace", style="Subtitle.TLabel").pack(anchor="w", pady=(2, 10))
+        ttk.Label(header, text=naming_interface.get_attr("l_app_name"), style="Title.TLabel").pack(anchor="w")
+        ttk.Label(header, text=naming_interface.get_attr("l_app_subtitle"), style="Subtitle.TLabel").pack(anchor="w", pady=(2, 10))
 
         bar = ttk.Frame(self.root, style="Surface.TFrame", padding=(20, 12, 20, 14))
         bar.pack(fill="x", padx=20, pady=(12, 10))
@@ -160,23 +163,24 @@ class ReviewTrackerApp:
         self.mr_display_var = tk.StringVar(value="")
         self.version_var = tk.StringVar(value=program_version)
 
-        ttk.Label(bar, text="Project URL", style="Field.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(bar, text=naming_interface.get_attr("l_project_url"), style="Field.TLabel").grid(row=0, column=0, sticky="w")
         self.project_url_combo = ttk.Combobox(
             bar, textvariable=self.project_url_var, values=self.project_url_history, width=52
         )
         self.project_url_combo.grid(row=0, column=1, padx=4, sticky="we")
+        self.project_url_combo.bind("<<ComboboxSelected>>", self.on_project_url_selected)
 
         actions = ttk.Frame(bar, style="Surface.TFrame")
         actions.grid(row=0, column=3, padx=(8, 0), sticky="ne")
 
-        self.fetch_button = ttk.Button(actions, text="Fetch MRs", width=14, style="Accent.TButton", command=self.on_fetch_mrs)
+        self.fetch_button = ttk.Button(actions, text=naming_interface.get_attr("b_fetch_mrs"), width=14, style="Accent.TButton", command=self.on_fetch_mrs)
         self.fetch_button.pack(fill="x")
 
-        ttk.Label(bar, text="Merge request", style="Field.TLabel").grid(row=2, column=0, sticky="w", pady=(14, 0))
+        ttk.Label(bar, text=naming_interface.get_attr("l_merge_request"), style="Field.TLabel").grid(row=2, column=0, sticky="w", pady=(14, 0))
         self.mr_combo = ttk.Combobox(bar, textvariable=self.mr_display_var, state="disabled", width=70)
         self.mr_combo.grid(row=2, column=1, columnspan=3, padx=0, pady=(14, 0), sticky="we")
         self.mr_combo.bind("<<ComboboxSelected>>", self.on_mr_selected)
-        self.mr_display_var.set("Fetch MRs to load the list")
+        self.mr_display_var.set(naming_interface.get_attr("v_fetch_mrs_to_load"))
 
         self.progress = ttk.Progressbar(bar, mode="indeterminate")
         self.progress.grid(row=4, column=0, columnspan=3, pady=(6, 0), sticky="we")
@@ -211,10 +215,10 @@ class ReviewTrackerApp:
     def _build_lists(self) -> None:
         metrics = ttk.Frame(self.root)
         metrics.pack(fill="x", padx=20, pady=(0, 10))
-        self._metric_card(metrics, "Commits", self.commit_count_var, 0)
-        self._metric_card(metrics, "Reviewed commits", self.reviewed_commit_count_var, 1)
-        self._metric_card(metrics, "Changed files", self.file_count_var, 2)
-        self._metric_card(metrics, "Reviewed files", self.reviewed_file_count_var, 3)
+        self._metric_card(metrics, naming_interface.get_attr("l_commits"), self.commit_count_var, 0)
+        self._metric_card(metrics, naming_interface.get_attr("l_reviewed_commits"), self.reviewed_commit_count_var, 1)
+        self._metric_card(metrics, naming_interface.get_attr("l_changed_files"), self.file_count_var, 2)
+        self._metric_card(metrics, naming_interface.get_attr("l_reviewed_files"), self.reviewed_file_count_var, 3)
         for column in range(4):
             metrics.columnconfigure(column, weight=1)
 
@@ -222,13 +226,13 @@ class ReviewTrackerApp:
         toolbar.pack(fill="x", padx=20, pady=(0, 10))
         self.beyond_compare_button = ttk.Button(
             toolbar,
-            text="Open Diff in Beyond Compare",
+            text=naming_interface.get_attr("b_open_beyond_compare"),
             style="Secondary.TButton",
             command=self.on_open_beyond_compare,
         )
         self.open_mr_button = ttk.Button(
             toolbar,
-            text="Open MR in GitLab",
+            text=naming_interface.get_attr("b_open_mr_in_gitlab"),
             style="Secondary.TButton",
             command=self.on_open_mr_in_gitlab,
         )
@@ -236,20 +240,20 @@ class ReviewTrackerApp:
         paned = ttk.PanedWindow(self.root, orient="horizontal")
         paned.pack(fill="both", expand=True, padx=20, pady=(0, 10))
 
-        commits_frame = ttk.Labelframe(paned, text="  Commits")
-        files_frame = ttk.Labelframe(paned, text=" Changed files")
+        commits_frame = ttk.Labelframe(paned, text=naming_interface.get_attr("l_commits_panel"))
+        files_frame = ttk.Labelframe(paned, text=naming_interface.get_attr("l_changed_files_panel"))
         paned.add(commits_frame, weight=1)
         paned.add(files_frame, weight=1)
 
         self.commits_tree = self._make_tree(
             commits_frame,
             ("sha", "author", "title", "reviewers"),
-            {"sha": "SHA", "author": "Author", "title": "Message", "reviewers": "Reviewed by"},
+            {"sha": naming_interface.get_attr("h_sha"), "author": naming_interface.get_attr("h_author"), "title": naming_interface.get_attr("h_message"), "reviewers": naming_interface.get_attr("h_reviewed_by")},
         )
         self.commits_tree.tag_configure("merge", background="#f5eee1", foreground="#806548")
 
         self.files_tree = self._make_tree(
-            files_frame, ("path", "reviewers", "open"), {"path": "File", "reviewers": "Reviewed by", "open": "GitLab"}
+            files_frame, ("path", "reviewers", "open"), {"path": naming_interface.get_attr("h_file"), "reviewers": naming_interface.get_attr("h_reviewed_by"), "open": naming_interface.get_attr("h_gitlab")}
         )
         self.files_tree.column("open", width=90, stretch=False, anchor="center")
 
@@ -261,11 +265,11 @@ class ReviewTrackerApp:
         self.files_tree.bind("<Button-3>", self.on_files_tree_right_click)
 
         self.commits_context_menu = tk.Menu(self.root, tearoff=0)
-        self.commits_context_menu.add_command(label="Mark as reviewed", command=lambda: self.on_toggle_commit())
-        self.commits_context_menu.add_command(label="Show changes compared to main", command=self._compare_selected_commit_to_main)
+        self.commits_context_menu.add_command(label=naming_interface.get_attr("m_mark_reviewed"), command=lambda: self.on_toggle_commit())
+        self.commits_context_menu.add_command(label=naming_interface.get_attr("m_compare_to_main"), command=self._compare_selected_commit_to_main)
 
         self.files_context_menu = tk.Menu(self.root, tearoff=0)
-        self.files_context_menu.add_command(label="Mark as reviewed", command=lambda: self.on_toggle_file())
+        self.files_context_menu.add_command(label=naming_interface.get_attr("m_mark_reviewed"), command=lambda: self.on_toggle_file())
 
     def _metric_card(self, parent: ttk.Frame, label: str, variable: tk.StringVar, column: int) -> None:
         card = ttk.Frame(parent, style="Card.TFrame", padding=(12, 7))
@@ -295,13 +299,13 @@ class ReviewTrackerApp:
         project_url = self.project_url_var.get().strip()
         token = self.config.get("token", "").strip()
         if not (project_url and token):
-            messagebox.showerror("Missing info", "Enter a project URL and add an access token in Settings.")
+            messagebox.showerror(naming_interface.get_attr("t_missing_info"), naming_interface.get_attr("m_missing_info"))
             return
 
         try:
             base_url, project_path = parse_project_url(project_url)
         except ValueError as exc:
-            messagebox.showerror("Invalid URL", str(exc))
+            messagebox.showerror(naming_interface.get_attr("t_invalid_url"), str(exc))
             return
 
         self.project_url_history = add_to_history(self.project_url_history, project_url)
@@ -316,9 +320,9 @@ class ReviewTrackerApp:
         self.current_mr_url = None
         self.open_mr_button.pack_forget()
         self.beyond_compare_button.pack_forget()
-        self.mr_display_var.set("Loading merge requests...")
+        self.mr_display_var.set(naming_interface.get_attr("v_loading_merge_requests"))
         self._set_busy(True)
-        self.status_var.set("Fetching merge requests...")
+        self.status_var.set(naming_interface.get_attr("v_fetching_merge_requests"))
         threading.Thread(
             target=self._fetch_mrs_worker, args=(base_url, token, project_path), daemon=True
         ).start()
@@ -344,7 +348,7 @@ class ReviewTrackerApp:
     def _on_mrs_fetched(self) -> None:
         self._set_busy(False)
         self._populate_mr_list()
-        self.status_var.set(f"Signed in as {self.current_user}. {len(self.all_mrs)} open merge requests found.")
+        self.status_var.set(naming_interface.get_attr("v_signed_in_mrs_found").format(user=self.current_user, count=len(self.all_mrs)))
 
     def _populate_mr_list(self) -> None:
         self.mr_by_display = {}
@@ -356,7 +360,12 @@ class ReviewTrackerApp:
         self.mr_combo["values"] = values
         if self.mr_display_var.get() in self.mr_by_display:
             return
-        self.mr_display_var.set("Select a merge request..." if values else "No open merge requests found")
+        self.mr_display_var.set(naming_interface.get_attr("v_select_merge_request") if values else naming_interface.get_attr("v_no_open_merge_requests"))
+
+    def on_project_url_selected(self, _event=None) -> None:
+        project_url = self.project_url_var.get()
+        if project_url:
+            self.on_fetch_mrs()
 
     def on_mr_selected(self, _event=None) -> None:
         mr = self.mr_by_display.get(self.mr_display_var.get())
@@ -372,7 +381,7 @@ class ReviewTrackerApp:
             self._refresh_job = None
 
         self._set_busy(True)
-        self.status_var.set(f"Loading !{mr_iid}...")
+        self.status_var.set(naming_interface.get_attr("v_loading_mr").format(iid=mr_iid))
         self.beyond_compare_button.pack_forget()
         self.open_mr_button.pack(side="right", padx=(8, 0))
         threading.Thread(target=self._load_worker, args=(mr_iid,), daemon=True).start()
@@ -395,8 +404,8 @@ class ReviewTrackerApp:
 
     def _on_error(self, message: str) -> None:
         self._set_busy(False)
-        self.status_var.set("Error.")
-        messagebox.showerror(f"GitLab Review Tracker", message)
+        self.status_var.set(naming_interface.get_attr("v_error"))
+        messagebox.showerror(naming_interface.get_attr("l_app_name"), message)
 
     def on_open_mr_in_gitlab(self) -> None:
         if self.current_mr_url:
@@ -412,11 +421,11 @@ class ReviewTrackerApp:
         print(result)
         beyond_compare_path = self.config.get("beyond_compare_path", "").strip()
         if not beyond_compare_path:
-            messagebox.showerror("Beyond Compare", "Set the Beyond Compare executable path in Settings first.")
+            messagebox.showerror(naming_interface.get_attr("t_beyond_compare"), naming_interface.get_attr("m_beyond_compare_path"))
             return
 
         self._set_busy(True)
-        self.status_var.set("Preparing Beyond Compare diff...")
+        self.status_var.set(naming_interface.get_attr("v_preparing_beyond_compare"))
         threading.Thread(
             target=self._open_beyond_compare_worker, args=(first_sha, last_sha, beyond_compare_path), daemon=True
         ).start()
@@ -438,7 +447,7 @@ class ReviewTrackerApp:
 
     def _on_beyond_compare_done(self) -> None:
         self._set_busy(False)
-        self.status_var.set(f"Signed in as {self.current_user}.")
+        self.status_var.set(naming_interface.get_attr("v_signed_in").format(user=self.current_user))
 
     def _populate(self, commits: list[dict]) -> None:
         self.commits_tree.delete(*self.commits_tree.get_children())
@@ -448,7 +457,7 @@ class ReviewTrackerApp:
             sha = commit["id"]
             is_merge = len(commit.get("parent_ids") or []) > 1
             self.commit_is_merge[sha] = is_merge
-            title = commit.get("title", "") + (" (merge commit)" if is_merge else "")
+            title = commit.get("title", "") + (naming_interface.get_attr("v_merge_commit") if is_merge else "")
             author_data = commit.get("author") or {}
             author = commit.get("author_name") or author_data.get("name") or author_data.get("username", "")
             reviewers = self.state.get("commits", {}).get(sha, [])
@@ -464,7 +473,7 @@ class ReviewTrackerApp:
         self.file_count_var.set("0")
         self.reviewed_file_count_var.set("0")
         self._set_busy(False)
-        self.status_var.set(f"Loaded as {self.current_user}. {len(commits)} commits.")
+        self.status_var.set(naming_interface.get_attr("v_loaded_commits").format(user=self.current_user, count=len(commits)))
         self.beyond_compare_button.pack(side="right")
         self._schedule_refresh()
 
@@ -476,7 +485,7 @@ class ReviewTrackerApp:
             tags = ("reviewed",) if reviewers else ()
             reviewed_files += bool(reviewers)
             self.files_tree.insert(
-                "", "end", iid=path, values=(path, ", ".join(reviewers), "\U0001F517 View diff"), tags=tags
+                "", "end", iid=path, values=(path, ", ".join(reviewers), naming_interface.get_attr("v_view_diff")), tags=tags
             )
         self.file_count_var.set(str(len(paths)))
         self.reviewed_file_count_var.set(str(reviewed_files))
@@ -513,7 +522,7 @@ class ReviewTrackerApp:
         if not selection or not (self.client and self.project_path and self.mr_iid and self.current_user):
             return
         sha = selection[0]
-        self.status_var.set("Updating...")
+        self.status_var.set(naming_interface.get_attr("v_updating"))
         threading.Thread(target=self._toggle_commit_worker, args=(sha,), daemon=True).start()
 
     def _toggle_commit_worker(self, sha: str) -> None:
@@ -536,7 +545,7 @@ class ReviewTrackerApp:
             if self.files_tree.exists(path):
                 self._refresh_row(self.files_tree, path, "files", review_state_store.file_key(sha, path))
         self._update_metrics()
-        self.status_var.set(f"Signed in as {self.current_user}.")
+        self.status_var.set(naming_interface.get_attr("v_signed_in").format(user=self.current_user))
 
     def on_toggle_file(self) -> None:
         selection = self.files_tree.selection()
@@ -545,7 +554,7 @@ class ReviewTrackerApp:
         ):
             return
         path = selection[0]
-        self.status_var.set("Updating...")
+        self.status_var.set(naming_interface.get_attr("v_updating"))
         threading.Thread(target=self._toggle_file_worker, args=(self.active_commit_sha, path), daemon=True).start()
 
     def on_files_tree_double_click(self, event: tk.Event) -> None:
@@ -591,7 +600,7 @@ class ReviewTrackerApp:
             return
         sha = selection[0]
         self._set_busy(True)
-        self.status_var.set("Comparing to main...")
+        self.status_var.set(naming_interface.get_attr("v_comparing_to_main"))
         threading.Thread(
             target=self._compare_to_main_worker, args=(sha,), daemon=True
         ).start()
@@ -612,29 +621,29 @@ class ReviewTrackerApp:
 
     def _on_compare_to_main_done(self, sha: str, diff_files: list[str]) -> None:
         self._set_busy(False)
-        self.status_var.set(f"Signed in as {self.current_user}.")
+        self.status_var.set(naming_interface.get_attr("v_signed_in").format(user=self.current_user))
         if not diff_files:
-            messagebox.showinfo("No differences", "No differences compared to main.")
+            messagebox.showinfo(naming_interface.get_attr("t_no_differences"), naming_interface.get_attr("m_no_differences"))
             return
         self._show_diff_files_window(sha, diff_files)
 
     def _show_diff_files_window(self, sha: str, diff_files: list[str]) -> None:
         window = tk.Toplevel(self.root)
-        window.title(f"Changes vs main - {sha[:8]}")
+        window.title(naming_interface.get_attr("t_changes_vs_main").format(sha=sha[:8]))
         window.geometry("640x420")
         window.configure(background="#f6f5f2")
 
         ttk.Label(
-            window, text=f"Files of commit {sha[:8]} that differ from main ({len(diff_files)})", style="Field.TLabel"
+            window, text=naming_interface.get_attr("l_files_differ_from_main").format(sha=sha[:8], count=len(diff_files)), style="Field.TLabel"
         ).pack(anchor="w", padx=12, pady=(12, 6))
 
         container = ttk.Frame(window, style="Surface.TFrame")
         container.pack(fill="both", expand=True, padx=12, pady=(0, 12))
 
         tree = ttk.Treeview(container, columns=("path", "reviewers", "open"), show="headings", selectmode="browse")
-        tree.heading("path", text="File")
-        tree.heading("reviewers", text="Reviewed by")
-        tree.heading("open", text="GitLab")
+        tree.heading("path", text=naming_interface.get_attr("h_file"))
+        tree.heading("reviewers", text=naming_interface.get_attr("h_reviewed_by"))
+        tree.heading("open", text=naming_interface.get_attr("h_gitlab"))
         tree.column("path", width=360, stretch=True)
         tree.column("reviewers", width=50, stretch=False)
         tree.column("open", width=100, stretch=False, anchor="center")
@@ -642,7 +651,7 @@ class ReviewTrackerApp:
         for path in diff_files:
             reviewers = self.state.get("files", {}).get(review_state_store.file_key(sha, path), [])
             tags = ("reviewed",) if reviewers else ()
-            tree.insert("", "end", iid=path, values=(path, ", ".join(reviewers), "\U0001F517 View diff"), tags=tags)
+            tree.insert("", "end", iid=path, values=(path, ", ".join(reviewers), naming_interface.get_attr("v_view_diff")), tags=tags)
 
         scrollbar = ttk.Scrollbar(container, orient="vertical", style="Slim.Vertical.TScrollbar", command=tree.yview)
         tree.configure(yscrollcommand=scrollbar.set)
@@ -651,7 +660,7 @@ class ReviewTrackerApp:
 
         diff_context_menu = tk.Menu(window, tearoff=0)
         diff_context_menu.add_command(
-            label="Mark as reviewed", command=lambda: self._toggle_diff_file_reviewed(sha, tree)
+            label=naming_interface.get_attr("m_mark_reviewed"), command=lambda: self._toggle_diff_file_reviewed(sha, tree)
         )
 
         def on_click(event: tk.Event) -> None:
@@ -707,7 +716,7 @@ class ReviewTrackerApp:
             self._refresh_row(self.files_tree, path, "files", review_state_store.file_key(sha, path))
         self._refresh_row(self.commits_tree, sha, "commits", sha)
         self._update_metrics()
-        self.status_var.set(f"Signed in as {self.current_user}.")
+        self.status_var.set(naming_interface.get_attr("v_signed_in").format(user=self.current_user))
 
     def _refresh_row(self, tree: ttk.Treeview, item_id: str, kind: str, key: str) -> None:
         if not tree.exists(item_id):

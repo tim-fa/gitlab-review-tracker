@@ -5,6 +5,9 @@ import tkinter as tk
 from tkinter import ttk
 
 import tk_util
+from naming_interface import NamingInterface
+
+naming_interface = NamingInterface()
 
 TRACK_COLOR = "#dedbd4"
 RANGE_COLOR = "#f97362"
@@ -32,7 +35,7 @@ class CommitRangeDialog:
         self._active_handle = "first"
 
         self.window = tk.Toplevel(parent)
-        self.window.title("Select commit range")
+        self.window.title(naming_interface.get_attr("t_select_commit_range"))
         self.window.transient(parent)
         self.window.geometry(f"{DIALOG_WIDTH}x{DIALOG_HEIGHT}")
         self.window.resizable(False, True)
@@ -45,7 +48,7 @@ class CommitRangeDialog:
         content.columnconfigure(0, weight=1)
         content.rowconfigure(4, weight=1)
 
-        ttk.Label(content, text="Choose commits to compare", style="Field.TLabel").grid(
+        ttk.Label(content, text=naming_interface.get_attr("l_choose_commits"), style="Field.TLabel").grid(
             row=0, column=0, sticky="w"
         )
 
@@ -54,8 +57,8 @@ class CommitRangeDialog:
         summary.columnconfigure((0, 1), weight=1)
         self.first_var = tk.StringVar()
         self.last_var = tk.StringVar()
-        self._make_summary(summary, "FROM (OLDER)", self.first_var, 0)
-        self._make_summary(summary, "TO (NEWER)", self.last_var, 1)
+        self._make_summary(summary, naming_interface.get_attr("l_from_older"), self.first_var, 0)
+        self._make_summary(summary, naming_interface.get_attr("l_to_newer"), self.last_var, 1)
 
         self.slider = tk.Canvas(
             content,
@@ -72,7 +75,7 @@ class CommitRangeDialog:
         self.slider.bind("<Left>", lambda _event: self._nudge(-1))
         self.slider.bind("<Right>", lambda _event: self._nudge(1))
 
-        ttk.Label(content, text="Older commits  ->  Newer commits", style="Muted.TLabel").grid(
+        ttk.Label(content, text=naming_interface.get_attr("l_commit_direction"), style="Muted.TLabel").grid(
             row=3, column=0, sticky="w", pady=(0, 6)
         )
 
@@ -109,10 +112,10 @@ class CommitRangeDialog:
         actions.grid(row=5, column=0, sticky="ew", pady=(12, 0))
         self.count_var = tk.StringVar()
         ttk.Label(actions, textvariable=self.count_var, style="Muted.TLabel").pack(side="left")
-        ttk.Button(actions, text="Cancel", style="Secondary.TButton", command=self._cancel).pack(
+        ttk.Button(actions, text=naming_interface.get_attr("b_cancel"), style="Secondary.TButton", command=self._cancel).pack(
             side="right", padx=(6, 0)
         )
-        ttk.Button(actions, text="Compare range", style="Accent.TButton", command=self._ok).pack(side="right")
+        ttk.Button(actions, text=naming_interface.get_attr("b_compare_range"), style="Accent.TButton", command=self._ok).pack(side="right")
 
         self._refresh_selection()
         tk_util.position_over_parent(self, parent, self.window)
@@ -128,7 +131,7 @@ class CommitRangeDialog:
         ttk.Label(frame, textvariable=variable, style="Field.TLabel").pack(anchor="w", pady=(2, 0))
 
     def _format(self, commit: dict, index: int) -> str:
-        marker = " (oldest)" if index == 0 else " (newest)" if index == len(self.chronological) - 1 else ""
+        marker = naming_interface.get_attr("v_oldest") if index == 0 else naming_interface.get_attr("v_newest") if index == len(self.chronological) - 1 else ""
         return f"{index + 1:>3}.  {commit['id'][:8]}  {commit.get('title', '')}{marker}"
 
     def _summary(self, index: int) -> str:
@@ -170,8 +173,8 @@ class CommitRangeDialog:
             x = self._x_for_index(index)
             self.slider.create_line(x, y - 7, x, y + 7, fill=MUTED_COLOR, width=1)
 
-        self._draw_handle(first_x, y, "FROM", self._active_handle == "first")
-        self._draw_handle(last_x, y, "TO", self._active_handle == "last")
+        self._draw_handle(first_x, y, naming_interface.get_attr("l_from"), self._active_handle == "first")
+        self._draw_handle(last_x, y, naming_interface.get_attr("l_to"), self._active_handle == "last")
 
     def _draw_handle(self, x: float, y: float, label: str, active: bool) -> None:
         radius = 9 if active else 8
@@ -230,8 +233,8 @@ class CommitRangeDialog:
         self.first_var.set(self._summary(self.first_index))
         self.last_var.set(self._summary(self.last_index))
         selected_count = self.last_index - self.first_index + 1
-        suffix = "commit" if selected_count == 1 else "commits"
-        self.count_var.set(f"{selected_count} {suffix} selected")
+        suffix = naming_interface.get_attr("v_commit") if selected_count == 1 else naming_interface.get_attr("v_commits")
+        self.count_var.set(naming_interface.get_attr("v_selected_commits").format(count=selected_count, suffix=suffix))
 
         self.commit_list.selection_clear(0, "end")
         for index in range(len(self.chronological)):
