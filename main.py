@@ -23,7 +23,7 @@ from ui_settings import SettingsDialog
 
 DEFAULT_BEYOND_COMPARE_PATH = r"C:\Program Files\Beyond Compare 4\BCompare.exe"
 
-program_version = "v1.3.1"
+program_version = "v1.3.2"
 
 CONFIG_PATH = Path.home() / ".gitlab_review_tracker.json"
 DEFAULT_REFRESH_INTERVAL_SECONDS = 30
@@ -73,6 +73,7 @@ class ReviewTrackerApp:
         self._refresh_job: str | None = None
         self.all_mrs: list[dict] = []
         self.mr_by_display: dict[str, dict] = {}
+        self.current_mr_url: str | None = None
         self.current_commits: list[dict] = []
         self.commit_count_var = tk.StringVar(value="0")
         self.reviewed_commit_count_var = tk.StringVar(value="0")
@@ -225,6 +226,12 @@ class ReviewTrackerApp:
             style="Secondary.TButton",
             command=self.on_open_beyond_compare,
         )
+        self.open_mr_button = ttk.Button(
+            toolbar,
+            text="Open MR in GitLab",
+            style="Secondary.TButton",
+            command=self.on_open_mr_in_gitlab,
+        )
 
         paned = ttk.PanedWindow(self.root, orient="horizontal")
         paned.pack(fill="both", expand=True, padx=20, pady=(0, 10))
@@ -306,6 +313,9 @@ class ReviewTrackerApp:
             self.root.after_cancel(self._refresh_job)
             self._refresh_job = None
 
+        self.current_mr_url = None
+        self.open_mr_button.pack_forget()
+        self.beyond_compare_button.pack_forget()
         self.mr_display_var.set("Loading merge requests...")
         self._set_busy(True)
         self.status_var.set("Fetching merge requests...")
@@ -353,6 +363,9 @@ class ReviewTrackerApp:
         if not mr or not (self.client and self.project_id and self.project_path):
             return
         mr_iid = int(mr["iid"])
+        self.current_mr_url = mr.get("web_url") or (
+            f"{self.client.base_url}/{self.project_path}/-/merge_requests/{mr_iid}"
+        )
 
         if self._refresh_job is not None:
             self.root.after_cancel(self._refresh_job)
@@ -361,6 +374,7 @@ class ReviewTrackerApp:
         self._set_busy(True)
         self.status_var.set(f"Loading !{mr_iid}...")
         self.beyond_compare_button.pack_forget()
+        self.open_mr_button.pack(side="right", padx=(8, 0))
         threading.Thread(target=self._load_worker, args=(mr_iid,), daemon=True).start()
 
     def _load_worker(self, mr_iid: int) -> None:
@@ -383,6 +397,10 @@ class ReviewTrackerApp:
         self._set_busy(False)
         self.status_var.set("Error.")
         messagebox.showerror(f"GitLab Review Tracker", message)
+
+    def on_open_mr_in_gitlab(self) -> None:
+        if self.current_mr_url:
+            webbrowser.open(self.current_mr_url)
 
     def on_open_beyond_compare(self) -> None:
         if not (self.client and self.project_path and self.current_commits):
