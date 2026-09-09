@@ -62,6 +62,8 @@
    "v_selected_commits": "{count} {suffix} selected",
    "v_commit": "commit",
    "v_commits": "commits",
+   "cb_show_closed_mrs": "Show closed",
+   "cb_show_merged_mrs": "Show merged",
    "t_settings": "Settings",
    "l_gitlab": "GitLab",
    "l_connection_settings": "Connection settings",

@@ -26,7 +26,7 @@ naming_interface = NamingInterface()
 
 DEFAULT_BEYOND_COMPARE_PATH = r"C:\Program Files\Beyond Compare 4\BCompare.exe"
 
-program_version = "v1.3.2"
+program_version = "v1.3.3"
 
 CONFIG_PATH = Path.home() / ".gitlab_review_tracker.json"
 DEFAULT_REFRESH_INTERVAL_SECONDS = 30
@@ -82,6 +82,8 @@ class ReviewTrackerApp:
         self.reviewed_commit_count_var = tk.StringVar(value="0")
         self.file_count_var = tk.StringVar(value="0")
         self.reviewed_file_count_var = tk.StringVar(value="0")
+        self.show_closed_mrs = False
+        self.show_merged_mrs = False
 
         self.config = load_config()
         self.config.setdefault("beyond_compare_path", DEFAULT_BEYOND_COMPARE_PATH)
@@ -113,6 +115,8 @@ class ReviewTrackerApp:
         style.configure("TEntry", fieldbackground="#faf9f6", foreground="#292e30", insertcolor="#292e30", borderwidth=0)
         style.configure("TCombobox", fieldbackground="#faf9f6", background="#faf9f6", foreground="#292e30", borderwidth=0)
         style.map("TCombobox", fieldbackground=[("readonly", "#faf9f6")], foreground=[("readonly", "#292e30")])
+        style.configure("TCheckbutton", background="#fffefa", foreground="#3f4548", font=(font, 9))
+        style.map("TCheckbutton", background=[("active", "#fffefa")], foreground=[("active", "#292e30")])
         style.configure("Accent.TButton", background="#f97362", foreground="#292e30", font=(font, 9, "bold"), padding=(10, 5), borderwidth=0)
         style.map("Accent.TButton", background=[("active", "#fb8b78"), ("disabled", "#f7b0a5")])
         style.configure("Secondary.TButton", background="#ebe9e4", foreground="#3f4548", font=(font, 9), padding=(9, 5), borderwidth=0)
@@ -182,19 +186,50 @@ class ReviewTrackerApp:
         self.mr_combo.bind("<<ComboboxSelected>>", self.on_mr_selected)
         self.mr_display_var.set(naming_interface.get_attr("v_fetch_mrs_to_load"))
 
+        # MR filtering checkboxes
+        checkbox_frame = ttk.Frame(bar, style="Surface.TFrame")
+        checkbox_frame.grid(row=3, column=0, columnspan=3, sticky="w", pady=(8, 0))
+        
+        self.show_closed_var = tk.BooleanVar(value=False)
+        self.show_merged_var = tk.BooleanVar(value=False)
+        
+        self.show_closed_mrs_checkbox = ttk.Checkbutton(
+            checkbox_frame, 
+            text=naming_interface.get_attr("cb_show_closed_mrs"),
+            variable=self.show_closed_var,
+            command=self._on_filter_changed
+        )
+        self.show_closed_mrs_checkbox.pack(side="left", padx=(0, 16))
+        
+        self.show_merged_mrs_checkbox = ttk.Checkbutton(
+            checkbox_frame,
+            text=naming_interface.get_attr("cb_show_merged_mrs"),
+            variable=self.show_merged_var,
+            command=self._on_filter_changed
+        )
+        self.show_merged_mrs_checkbox.pack(side="left")
+
         self.progress = ttk.Progressbar(bar, mode="indeterminate")
         self.progress.grid(row=4, column=0, columnspan=3, pady=(6, 0), sticky="we")
         self.progress.grid_remove()
 
         ttk.Label(bar, textvariable=self.status_var, style="Field.TLabel").grid(
-            row=3, column=0, columnspan=3, pady=(14, 0), sticky="w"
+            row=5, column=0, columnspan=3, pady=(14, 0), sticky="w"
         )
 
         bar.columnconfigure(1, weight=1)
-        ttk.Label(bar, textvariable=self.version_var, style="Muted.TLabel").grid(row=3, column=3, sticky="e", pady=(14, 0))
+        ttk.Label(bar, textvariable=self.version_var, style="Muted.TLabel").grid(row=5, column=3, sticky="e", pady=(14, 0))
 
     def open_settings(self) -> None:
         SettingsDialog(self.root, self.config, self._save_settings)
+
+    def _on_filter_changed(self) -> None:
+        """Handle checkbox changes for MR filtering."""
+        self.show_closed_mrs = self.show_closed_var.get()
+        self.show_merged_mrs = self.show_merged_var.get()
+        # Re-fetch MRs if we have a project URL and token
+        if self.client and self.project_id:
+            self.on_fetch_mrs()
 
     def _save_settings(self, settings: dict) -> None:
         self.config.update(settings)
@@ -205,6 +240,8 @@ class ReviewTrackerApp:
     def _set_busy(self, busy: bool) -> None:
         self.fetch_button.configure(state="disabled" if busy else "normal")
         self.mr_combo.configure(state="disabled" if busy else "readonly")
+        self.show_closed_mrs_checkbox.configure(state="disabled" if busy else "normal")
+        self.show_merged_mrs_checkbox.configure(state="disabled" if busy else "normal")
         if busy:
             self.progress.grid()
             self.progress.start(12)
@@ -331,7 +368,7 @@ class ReviewTrackerApp:
         try:
             client = GitLabClient(base_url, token)
             project_id = client.project_id(project_path)
-            mrs = client.merge_requests(project_id)
+            mrs = client.merge_requests(project_id, show_closed=self.show_closed_mrs, show_merged=self.show_merged_mrs)
             user = client.current_user()["username"]
         except (GitLabError, Exception) as exc:  # noqa: BLE001 - surface any failure to the UI
             message = str(exc)

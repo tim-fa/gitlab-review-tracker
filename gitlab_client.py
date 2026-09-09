@@ -78,11 +78,45 @@ class GitLabClient:
         project = self._get(f"/projects/{encoded}")
         return project["id"]
 
-    def merge_requests(self, project_id: int) -> list[dict[str, Any]]:
-        """List open merge requests of the project, newest updated first."""
-        return self._get(
+    def merge_requests(self, project_id: int, show_closed: bool = False, show_merged: bool = False) -> list[dict[str, Any]]:
+        """List merge requests of the project, newest updated first.
+        
+        Args:
+            project_id: The project ID
+            show_closed: If True, include closed (but not merged) merge requests
+            show_merged: If True, include merged merge requests
+        """
+        # Make separate API calls for each state and combine results
+        mrs = []
+        
+        # Always include opened
+        opened_mrs = self._get(
             f"/projects/{project_id}/merge_requests?state=opened&per_page=100&order_by=updated_at&sort=desc"
         ) or []
+        mrs.extend(opened_mrs)
+        
+        if show_closed:
+            closed_mrs = self._get(
+                f"/projects/{project_id}/merge_requests?state=closed&per_page=100&order_by=updated_at&sort=desc"
+            ) or []
+            mrs.extend(closed_mrs)
+        
+        if show_merged:
+            merged_mrs = self._get(
+                f"/projects/{project_id}/merge_requests?state=merged&per_page=100&order_by=updated_at&sort=desc"
+            ) or []
+            mrs.extend(merged_mrs)
+        
+        # Sort by updated_at descending and remove duplicates (in case of overlaps)
+        seen_ids = set()
+        result = []
+        for mr in sorted(mrs, key=lambda m: m.get("updated_at", ""), reverse=True):
+            mr_id = mr.get("id")
+            if mr_id not in seen_ids:
+                seen_ids.add(mr_id)
+                result.append(mr)
+        
+        return result
 
     def commits(self, project_id: int, mr_iid: int) -> list[dict[str, Any]]:
         return self._get(f"/projects/{project_id}/merge_requests/{mr_iid}/commits?per_page=100") or []
