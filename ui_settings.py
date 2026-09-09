@@ -11,6 +11,7 @@ from collections.abc import Callable
 from tkinter import ttk
 import tk_util
 from naming_interface import NamingInterface
+from theme_integration import get_color
 
 naming_interface = NamingInterface()
 
@@ -23,7 +24,7 @@ class SettingsDialog:
       self.window.title(naming_interface.get_attr("t_settings"))
       self.window.transient(parent)
       self.window.resizable(False, False)
-      self.window.configure(background="#f6f5f2")
+      self.window.configure(background=get_color("background"))
       self.window.protocol("WM_DELETE_WINDOW", self.window.destroy)
 
       self.fields = []

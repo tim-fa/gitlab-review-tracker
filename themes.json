@@ -1,0 +1,45 @@
+{
+  "light": {
+    "name": "light",
+    "display_name": "Light",
+    "colors": {
+      "background": "#f6f5f2",
+      "surface": "#fffefa",
+      "field_background": "#faf9f6",
+      "text_primary": "#292e30",
+      "text_secondary": "#3f4548",
+      "text_muted": "#777b7b",
+      "accent": "#f97362",
+      "accent_hover": "#fb8b78",
+      "accent_disabled": "#f7b0a5",
+      "secondary_button": "#ebe9e4",
+      "secondary_hover": "#dedbd4",
+      "selection": "#fbe4dc",
+      "selection_endpoint": "#f7c2b8",
+      "row_merge_bg": "#f5eee1",
+      "row_merge_fg": "#806548",
+      "row_reviewed_bg": "#dcfce7",
+      "row_reviewed_fg": "#166534",
+      "divider": "#dedbd4",
+      "scrollbar_bg": "#d8d4cc",
+      "scrollbar_trough": "#f4f2ed",
+      "scrollbar_arrow": "#8f938f",
+      "scrollbar_active": "#c9c4ba",
+      "progressbar_bg": "#f97362",
+      "progressbar_trough": "#e3e1dc",
+      "table_header_bg": "#f0eee9",
+      "table_header_fg": "#777b7b"
+    },
+    "fonts": {
+      "default": 10,
+      "small": 8,
+      "tiny": 8,
+      "title": ["19", "bold"],
+      "subtitle": 9,
+      "field_label": ["9", "bold"],
+      "card_value": ["13", "bold"],
+      "card_label": 8,
+      "button": ["9", "bold"]
+    }
+  }
+}

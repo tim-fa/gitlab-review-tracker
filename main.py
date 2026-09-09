@@ -21,6 +21,8 @@ import commit_comparator
 from ui_commit_range_dialog import pick_commit_range
 from ui_settings import SettingsDialog
 from naming_interface import NamingInterface
+from theme_loader import initialize_theme_loader
+from theme_integration import apply_theme_to_styles, get_color
 
 naming_interface = NamingInterface()
 
@@ -61,8 +63,7 @@ class ReviewTrackerApp:
         root.title(naming_interface.get_attr("app_title").format(version=program_version))
         root.geometry("1280x720")
         root.minsize(900, 560)
-        root.configure(background="#f6f5f2")
-        self._configure_styles()
+        apply_theme_to_styles(root, font_name="Segoe UI")
 
         self.client: GitLabClient | None = None
         self.project_id: int | None = None
@@ -96,52 +97,6 @@ class ReviewTrackerApp:
         token = self.config.get("token", "").strip()
         if project_url and token:
             self.on_fetch_mrs()
-
-    def _configure_styles(self) -> None:
-
-        font: str = "Segoe UI"
-
-        style = ttk.Style(self.root)
-        style.theme_use("clam")
-        style.configure("TFrame", background="#f6f5f2")
-        style.configure("Surface.TFrame", background="#fffefa")
-        style.configure("Header.TFrame", background="#fffefa")
-        style.configure("TLabel", background="#fffefa", foreground="#3f4548", font=(font, 10))
-        style.configure("Muted.TLabel", background="#fffefa", foreground="#777b7b", font=(font, 9))
-        style.configure("Title.TLabel", background="#fffefa", foreground="#292e30", font=(font, 19, "bold"))
-        style.configure("Subtitle.TLabel", background="#fffefa", foreground="#777b7b", font=(font, 9))
-        style.configure("Status.TLabel", background="#f6f5f2", foreground="#777b7b", font=(font, 9))
-        style.configure("Field.TLabel", background="#fffefa", foreground="#777b7b", font=(font, 9, "bold"))
-        style.configure("TEntry", fieldbackground="#faf9f6", foreground="#292e30", insertcolor="#292e30", borderwidth=0)
-        style.configure("TCombobox", fieldbackground="#faf9f6", background="#faf9f6", foreground="#292e30", borderwidth=0)
-        style.map("TCombobox", fieldbackground=[("readonly", "#faf9f6")], foreground=[("readonly", "#292e30")])
-        style.configure("TCheckbutton", background="#fffefa", foreground="#3f4548", font=(font, 9))
-        style.map("TCheckbutton", background=[("active", "#fffefa")], foreground=[("active", "#292e30")])
-        style.configure("Accent.TButton", background="#f97362", foreground="#292e30", font=(font, 9, "bold"), padding=(10, 5), borderwidth=0)
-        style.map("Accent.TButton", background=[("active", "#fb8b78"), ("disabled", "#f7b0a5")])
-        style.configure("Secondary.TButton", background="#ebe9e4", foreground="#3f4548", font=(font, 9), padding=(9, 5), borderwidth=0)
-        style.map("Secondary.TButton", background=[("active", "#dedbd4")])
-        style.configure("Card.TFrame", background="#fffefa")
-        style.configure("CardValue.TLabel", background="#fffefa", foreground="#292e30", font=(font, 13, "bold"))
-        style.configure("CardLabel.TLabel", background="#fffefa", foreground="#777b7b", font=(font, 8))
-        style.configure("TLabelframe", background="#fffefa", bordercolor="#dedbd4", relief="solid")
-        style.configure("TLabelframe.Label", background="#fffefa", foreground="#3f4548", font=(font, 10, "bold"))
-        style.configure("Treeview", background="#fffefa", fieldbackground="#fffefa", foreground="#3f4548", rowheight=24, borderwidth=0, font=(font, 8))
-        style.configure("Treeview.Heading", background="#f0eee9", foreground="#777b7b", font=(font, 9, "bold"), relief="flat", padding=8)
-        style.map("Treeview", background=[("selected", "#fbe4dc")], foreground=[("selected", "#292e30")])
-        style.configure("Horizontal.TProgressbar", background="#f97362", troughcolor="#e3e1dc", borderwidth=0)
-        style.configure(
-            "Slim.Vertical.TScrollbar",
-            background="#d8d4cc",
-            troughcolor="#f4f2ed",
-            bordercolor="#f4f2ed",
-            arrowcolor="#8f938f",
-            relief="flat",
-            width=10,
-            arrowsize=10,
-            gripcount=0,
-        )
-        style.map("Slim.Vertical.TScrollbar", background=[("active", "#c9c4ba")])
 
     def _build_connection_bar(self, cfg: dict) -> None:
         header = ttk.Frame(self.root, style="Header.TFrame", padding=(20, 14, 20, 12))
@@ -287,7 +242,11 @@ class ReviewTrackerApp:
             ("sha", "author", "title", "reviewers"),
             {"sha": naming_interface.get_attr("h_sha"), "author": naming_interface.get_attr("h_author"), "title": naming_interface.get_attr("h_message"), "reviewers": naming_interface.get_attr("h_reviewed_by")},
         )
-        self.commits_tree.tag_configure("merge", background="#f5eee1", foreground="#806548")
+        self.commits_tree.tag_configure(
+            "merge",
+            background=get_color("row_merge_bg"),
+            foreground=get_color("row_merge_fg")
+        )
 
         self.files_tree = self._make_tree(
             files_frame, ("path", "reviewers", "open"), {"path": naming_interface.get_attr("h_file"), "reviewers": naming_interface.get_attr("h_reviewed_by"), "open": naming_interface.get_attr("h_gitlab")}
@@ -323,7 +282,11 @@ class ReviewTrackerApp:
             tree.heading(col, text=headings[col])
             width = 72 if col == "sha" else 50 if col == "reviewers" else 92 if col == "author" else 180
             tree.column(col, width=width, stretch=col != "sha")
-        tree.tag_configure("reviewed", background="#dcfce7", foreground="#166534")
+        tree.tag_configure(
+            "reviewed",
+            background=get_color("row_reviewed_bg"),
+            foreground=get_color("row_reviewed_fg")
+        )
 
         scrollbar = ttk.Scrollbar(container, orient="vertical", style="Slim.Vertical.TScrollbar", command=tree.yview)
         tree.configure(yscrollcommand=scrollbar.set)
@@ -668,7 +631,7 @@ class ReviewTrackerApp:
         window = tk.Toplevel(self.root)
         window.title(naming_interface.get_attr("t_changes_vs_main").format(sha=sha[:8]))
         window.geometry("640x420")
-        window.configure(background="#f6f5f2")
+        window.configure(background=get_color("background"))
 
         ttk.Label(
             window, text=naming_interface.get_attr("l_files_differ_from_main").format(sha=sha[:8], count=len(diff_files)), style="Field.TLabel"
@@ -684,7 +647,11 @@ class ReviewTrackerApp:
         tree.column("path", width=360, stretch=True)
         tree.column("reviewers", width=50, stretch=False)
         tree.column("open", width=100, stretch=False, anchor="center")
-        tree.tag_configure("reviewed", background="#dcfce7", foreground="#166534")
+        tree.tag_configure(
+            "reviewed",
+            background=get_color("row_reviewed_bg"),
+            foreground=get_color("row_reviewed_fg")
+        )
         for path in diff_files:
             reviewers = self.state.get("files", {}).get(review_state_store.file_key(sha, path), [])
             tags = ("reviewed",) if reviewers else ()
@@ -808,6 +775,9 @@ class ReviewTrackerApp:
 
 
 def main() -> None:
+    # Initialize theme loader with optional themes.json
+    initialize_theme_loader(Path(__file__).parent / "themes.json")
+    
     root = tk.Tk()
     ReviewTrackerApp(root)
     root.mainloop()

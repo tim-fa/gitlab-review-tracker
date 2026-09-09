@@ -6,16 +6,10 @@ from tkinter import ttk
 
 import tk_util
 from naming_interface import NamingInterface
+from theme_integration import get_color
 
 naming_interface = NamingInterface()
 
-TRACK_COLOR = "#dedbd4"
-RANGE_COLOR = "#f97362"
-SURFACE_COLOR = "#fffefa"
-TEXT_COLOR = "#292e30"
-MUTED_COLOR = "#777b7b"
-SELECTED_COLOR = "#fbe4dc"
-ENDPOINT_COLOR = "#f7c2b8"
 DIALOG_WIDTH = 760
 DIALOG_HEIGHT = 520
 
@@ -40,7 +34,7 @@ class CommitRangeDialog:
         self.window.geometry(f"{DIALOG_WIDTH}x{DIALOG_HEIGHT}")
         self.window.resizable(False, True)
         self.window.minsize(DIALOG_WIDTH, 470)
-        self.window.configure(background="#f6f5f2")
+        self.window.configure(background=get_color("background"))
         self.window.protocol("WM_DELETE_WINDOW", self._cancel)
 
         content = ttk.Frame(self.window, style="Surface.TFrame", padding=20)
@@ -63,7 +57,7 @@ class CommitRangeDialog:
         self.slider = tk.Canvas(
             content,
             height=72,
-            background=SURFACE_COLOR,
+            background=get_color("surface"),
             highlightthickness=0,
             takefocus=True,
             cursor="hand2",
@@ -87,10 +81,10 @@ class CommitRangeDialog:
             exportselection=False,
             activestyle="none",
             selectmode="browse",
-            background=SURFACE_COLOR,
-            foreground=TEXT_COLOR,
-            selectbackground=ENDPOINT_COLOR,
-            selectforeground=TEXT_COLOR,
+            background=get_color("surface"),
+            foreground=get_color("text_primary"),
+            selectbackground=get_color("selection_endpoint"),
+            selectforeground=get_color("text_primary"),
             relief="solid",
             borderwidth=1,
             highlightthickness=0,
@@ -163,15 +157,15 @@ class CommitRangeDialog:
         y = 38
         first_x = self._x_for_index(self.first_index)
         last_x = self._x_for_index(self.last_index)
-        self.slider.create_line(left, y, right, y, fill=TRACK_COLOR, width=6)
-        self.slider.create_line(first_x, y, last_x, y, fill=RANGE_COLOR, width=6)
+        self.slider.create_line(left, y, right, y, fill=get_color("divider"), width=6)
+        self.slider.create_line(first_x, y, last_x, y, fill=get_color("accent"), width=6)
 
         step = max(1, (len(self.chronological) - 1) // 12)
         tick_indexes = set(range(0, len(self.chronological), step))
         tick_indexes.add(len(self.chronological) - 1)
         for index in tick_indexes:
             x = self._x_for_index(index)
-            self.slider.create_line(x, y - 7, x, y + 7, fill=MUTED_COLOR, width=1)
+            self.slider.create_line(x, y - 7, x, y + 7, fill=get_color("text_muted"), width=1)
 
         self._draw_handle(first_x, y, naming_interface.get_attr("l_from"), self._active_handle == "first")
         self._draw_handle(last_x, y, naming_interface.get_attr("l_to"), self._active_handle == "last")
@@ -183,15 +177,15 @@ class CommitRangeDialog:
             y - radius,
             x + radius,
             y + radius,
-            fill=RANGE_COLOR if active else SURFACE_COLOR,
-            outline=RANGE_COLOR,
+            fill=get_color("accent") if active else get_color("surface"),
+            outline=get_color("accent"),
             width=3,
         )
         self.slider.create_text(
             x,
             14,
             text=label,
-            fill=TEXT_COLOR if active else MUTED_COLOR,
+            fill=get_color("text_primary") if active else get_color("text_muted"),
             font=("Segoe UI", 8, "bold"),
         )
 
@@ -240,8 +234,8 @@ class CommitRangeDialog:
         for index in range(len(self.chronological)):
             in_range = self.first_index <= index <= self.last_index
             is_endpoint = index in (self.first_index, self.last_index)
-            background = ENDPOINT_COLOR if is_endpoint else SELECTED_COLOR if in_range else SURFACE_COLOR
-            foreground = TEXT_COLOR if in_range else MUTED_COLOR
+            background = get_color("selection_endpoint") if is_endpoint else get_color("selection") if in_range else get_color("surface")
+            foreground = get_color("text_primary") if in_range else get_color("text_muted")
             self.commit_list.itemconfig(index, background=background, foreground=foreground)
         visible_index = self.first_index if self._active_handle == "first" else self.last_index
         self.commit_list.see(visible_index)
