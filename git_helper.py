@@ -23,9 +23,9 @@ def clone_or_update_repo(repo_url: str, local_path: str) -> None:
    if not os.path.exists(local_path):
       print(f"[git_helper] Cloning {repo_url} -> {local_path}")
       subprocess.run(["git", "clone", repo_url, local_path], check=True)
-   else:
-      print(f"[git_helper] Updating {local_path}")
-      subprocess.run(["git", "-C", local_path, "fetch", "--all"], check=True)
+
+   print(f"[git_helper] Updating {local_path}")
+   subprocess.run(["git", "-C", local_path, "fetch", "--all"], check=True)
 
 def checkout_commit(local_path: str, commit_sha: str) -> None:
    """
@@ -151,89 +151,45 @@ def get_commit_before(commit_sha: str, local_path: str) -> str:
    commits = result.stdout.strip().split()
    return commits[1] if len(commits) > 1 else ""
 
-# def get_commit_timestamp(commit_sha: str, local_path: str) -> int:
-#    """
-#    Get the Unix timestamp of when a commit was made.
+def get_commit_timestamp(commit_sha: str, local_path: str) -> int:
+   """
+   Get the Unix timestamp of when a commit was made.
 
-#    Args:
-#       commit_sha (str): The SHA of the commit.
-#       local_path (str): The local path where the repository is set up.
+   Args:
+      commit_sha (str): The SHA of the commit.
+      local_path (str): The local path where the repository is set up.
 
-#    Returns:
-#       int: Unix timestamp of the commit.
-#    """
-#    result = subprocess.run(
-#        ["git", "-C", local_path, "log", "-1", "--format=%ct", commit_sha],
-#        check=True,
-#        capture_output=True,
-#        text=True,
-#    )
-#    return int(result.stdout.strip())
+   Returns:
+      int: Unix timestamp of the commit.
+   """
+   result = subprocess.run(
+       ["git", "-C", local_path, "log", "-1", "--format=%ct", commit_sha],
+       check=True,
+       capture_output=True,
+       text=True,
+   )
+   return int(result.stdout.strip())
 
-# def get_commits_on_branch_with_timestamps(branch_name: str, local_path: str) -> List[tuple[str, int]]:
-#    """
-#    Get all commits on a branch with their timestamps.
+def get_commits_on_branch_with_timestamps(branch_name: str, local_path: str) -> List[tuple[str, int]]:
+   """
+   Get all commits on a branch with their timestamps.
 
-#    Args:
-#       branch_name (str): The name of the branch (e.g., "main").
-#       local_path (str): The local path where the repository is set up.
+   Args:
+      branch_name (str): The name of the branch (e.g., "main").
+      local_path (str): The local path where the repository is set up.
 
-#    Returns:
-#       List[tuple[str, int]]: List of (commit_sha, timestamp) tuples in reverse chronological order.
-#    """
-#    result = subprocess.run(
-#        ["git", "-C", local_path, "log", "--format=%H %ct", branch_name],
-#        check=True,
-#        capture_output=True,
-#        text=True,
-#    )
-#    commits = []
-#    for line in result.stdout.strip().split("\n"):
-#       if line:
-#          sha, timestamp = line.split()
-#          commits.append((sha, int(timestamp)))
-#    return commits
-
-# def find_previous_commit_on_main(repo_url: str, commit_sha: str, local_path: str) -> str:
-#    """
-#    Find the most recent commit on main branch at the time the given commit was made.
-
-#    The function determines when the given commit was made (timestamp),
-#    then returns the SHA of the most recent commit on main branch that was
-#    created before that timestamp.
-
-#    Args:
-#       repo_url (str): The URL of the repository.
-#       commit_sha (str): The SHA of the commit to compare against (can be from any branch).
-#       local_path (str): The local path where the repository should be set up.
-
-#    Returns:
-#       str: The SHA of the most recent commit on main before the given commit's timestamp.
-
-#    Raises:
-#       ValueError: If no commit on main exists before the given commit.
-#    """
-#    # Clone or update the repository to ensure all branches are fetched
-#    clone_or_update_repo(repo_url, local_path)
-#    clean_repo(local_path)
-
-#    # Get the timestamp of the given commit (works for any commit in the repo, regardless of branch)
-#    commit_timestamp = get_commit_timestamp(commit_sha, local_path)
-#    print(f"[git_helper] Commit {commit_sha[:8]} was made at timestamp {commit_timestamp}")
-
-#    # Now checkout main and update to get the latest main commits
-#    checkout_branch_and_update(local_path, "main")
-
-#    # Get all commits on main with their timestamps
-#    main_commits = get_commits_on_branch_with_timestamps("main", local_path)
-
-#    # Filter commits that were made before the given commit
-#    earlier_commits = [(sha, ts) for sha, ts in main_commits if ts < commit_timestamp]
-
-#    if not earlier_commits:
-#       raise ValueError(f"No commit on main exists before commit {commit_sha[:8]}")
-
-#    # The most recent earlier commit is the first one in the list (since git log is in reverse chronological order)
-#    previous_sha, previous_timestamp = earlier_commits[0]
-#    print(f"[git_helper] Found previous commit on main: {previous_sha[:8]} at timestamp {previous_timestamp}")
-#    return previous_sha
+   Returns:
+      List[tuple[str, int]]: List of (commit_sha, timestamp) tuples in reverse chronological order.
+   """
+   result = subprocess.run(
+       ["git", "-C", local_path, "log", "--format=%H %ct", branch_name],
+       check=True,
+       capture_output=True,
+       text=True,
+   )
+   commits = []
+   for line in result.stdout.strip().split("\n"):
+      if line:
+         sha, timestamp = line.split()
+         commits.append((sha, int(timestamp)))
+   return commits

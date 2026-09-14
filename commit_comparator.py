@@ -22,6 +22,26 @@ def delete_nonempty_directory(directory_path: str) -> None:
             os.rmdir(os.path.join(root, name))
       os.rmdir(directory_path)
 
+def get_main_commit_at_compare_time(commit_to_compare_sha: str, repo_path: str) -> str:
+
+   main_commits_with_timestamps = git_helper.get_commits_on_branch_with_timestamps("main", repo_path)
+   compare_commit_timestamp = git_helper.get_commit_timestamp(commit_to_compare_sha, repo_path)
+
+   main_commit_at_compare_time = None
+   for main_commit, main_timestamp in reversed(main_commits_with_timestamps):
+
+      print(f"Checking main commit {main_commit} with timestamp {main_timestamp} against compare commit {commit_to_compare_sha} timestamp {compare_commit_timestamp}")
+
+      if main_timestamp > compare_commit_timestamp:
+         break
+
+      main_commit_at_compare_time = main_commit
+
+   if not main_commit_at_compare_time:
+      raise ValueError(f"Could not determine the main commit at the time of {commit_to_compare_sha}")
+   return main_commit_at_compare_time
+
+
 def get_changes_compared_to_main(project_name: str, repo_url: str, commit_to_compare_sha: str, previous_commit_sha: str) -> Tuple[List[str], str, str]:
    """
    Return the changes between a specific commit and the main branch.
@@ -48,33 +68,64 @@ def get_changes_compared_to_main(project_name: str, repo_url: str, commit_to_com
 
    print(f"[commit_comparator] Comparing {previous_commit_sha[:8]} -> {commit_to_compare_sha[:8]}")
 
+
+   # Setup compare repo
+   print(f"[commit_comparator] Setting up compare repo at {compare_repo}")
+   git_helper.clone_or_update_repo(repo_url, compare_repo)
+   git_helper.clean_repo(compare_repo)
+
+   # Setup base repo
+   print(f"[commit_comparator] Setting up base repo at {base_repo}")
+   git_helper.clone_or_update_repo(repo_url, base_repo)
+   git_helper.clean_repo(base_repo)
+   git_helper.checkout_branch_and_update(base_repo, "main")
+
+   # Get the most recent commit on main at the point in time commit_to_compare_sha was committed
+   print(f"[commit_comparator] Determining main commit at the time of {commit_to_compare_sha[:8]}")
+   main_commit_at_compare_time = get_main_commit_at_compare_time(commit_to_compare_sha, base_repo)
+
+   print(f"[commit_comparator] Main commit at the time of {commit_to_compare_sha[:8]} is {main_commit_at_compare_time[:8]}")
+
+   base_sha = None
+   compare_sha = None
+
    if previous_commit_sha == commit_to_compare_sha:
       print(f"[commit_comparator] Showing changes of single commit")
-      git_helper.setup_repo_at_commit_merge_main(repo_url, commit_to_compare_sha, compare_repo)
-      commit_before = git_helper.get_commit_before(commit_to_compare_sha, compare_repo)
-      if not commit_before:
+      compare_sha = commit_to_compare_sha
+      base_sha = git_helper.get_commit_before(commit_to_compare_sha, compare_repo)
+      if not base_sha:
          raise ValueError(f"Could not determine the commit before {commit_to_compare_sha}")
-      git_helper.setup_repo_at_commit_merge_main(repo_url, commit_before, base_repo)
-      print(f"[commit_comparator] Base repo set up at commit {commit_before[:8]} and compare repo at commit {commit_to_compare_sha[:8]}")
+      git_helper.setup_repo_at_commit_merge_main(repo_url, base_sha, base_repo)
    else:
       print(f"[commit_comparator] Showing changes between commits")
-      # Previous commit shall be included in the diff
-      real_previous = git_helper.get_commit_before(previous_commit_sha, compare_repo)
-      if not real_previous:
+      compare_sha = commit_to_compare_sha
+      base_sha = git_helper.get_commit_before(previous_commit_sha, compare_repo)
+
+      if not base_sha:
          raise ValueError(f"Could not determine the commit before {previous_commit_sha}")
-      git_helper.setup_repo_at_commit_merge_main(repo_url, real_previous, base_repo)
+      git_helper.setup_repo_at_commit_merge_main(repo_url, base_sha, base_repo)
       git_helper.setup_repo_at_commit_merge_main(repo_url, commit_to_compare_sha, compare_repo)
-      print(f"[commit_comparator] Base repo set up at commit {real_previous[:8]} and compare repo at commit {commit_to_compare_sha[:8]}")
+
+
+   print(f"[commit_comparator] Checking out base commit {base_sha[:8]} and compare commit {compare_sha[:8]}")
+   git_helper.checkout_commit(compare_repo, compare_sha)
+   git_helper.checkout_commit(base_repo, base_sha)
+
+   # Merge main into both repos at the relevant commits
+   print(f"[commit_comparator] Merging main commit {main_commit_at_compare_time[:8]} into both repos")
+   git_helper.merge_no_interaction(base_repo, main_commit_at_compare_time)
+   git_helper.merge_no_interaction(compare_repo, main_commit_at_compare_time)
+
 
    all_files = set()
-   print(f"[commit_comparator] Gathering all files between {previous_commit_sha[:8]} and {commit_to_compare_sha[:8]}")
-   for commit_sha in git_helper.get_all_commit_hashes_between(previous_commit_sha, commit_to_compare_sha, compare_repo):
+   print(f"[commit_comparator] Gathering all files between {base_sha[:8]} and {compare_sha[:8]}")
+   for commit_sha in git_helper.get_all_commit_hashes_between(base_sha, compare_sha, compare_repo):
       print(f"[commit_comparator] Found intermediate commit {commit_sha[:8]}")
       all_files.update(git_helper.get_files_of_commit(commit_sha, compare_repo))
       print(f"Files in commit {commit_sha[:8]}: {git_helper.get_files_of_commit(commit_sha, compare_repo)}")
 
    if not all_files:
-      raise ValueError(f"No files found between {previous_commit_sha[:8]} and {commit_to_compare_sha[:8]}")
+      raise ValueError(f"No files found between {base_sha[:8]} and {compare_sha[:8]}")
 
    diffs: List[str] = []
    for file_path in all_files:

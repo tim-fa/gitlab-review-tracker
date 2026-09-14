@@ -28,7 +28,7 @@ naming_interface = NamingInterface()
 
 DEFAULT_BEYOND_COMPARE_PATH = r"C:\Program Files\Beyond Compare 4\BCompare.exe"
 
-program_version = "v1.3.4"
+program_version = "v1.3.5"
 
 CONFIG_PATH = Path.home() / ".gitlab_review_tracker.json"
 DEFAULT_REFRESH_INTERVAL_SECONDS = 30
