@@ -20,6 +20,7 @@ from gitlab_client import GitLabClient, GitLabError, parse_project_url, get_gitl
 import commit_comparator
 from ui_commit_range_dialog import pick_commit_range
 from ui_settings import SettingsDialog
+from ui_bug_feature_request import BugFeatureRequestDialog
 from naming_interface import NamingInterface
 from theme_loader import initialize_theme_loader
 from theme_integration import apply_theme_to_styles, get_color
@@ -28,7 +29,7 @@ naming_interface = NamingInterface()
 
 DEFAULT_BEYOND_COMPARE_PATH = r"C:\Program Files\Beyond Compare 4\BCompare.exe"
 
-program_version = "v1.3.5"
+program_version = "v1.4.0"
 
 CONFIG_PATH = Path.home() / ".gitlab_review_tracker.json"
 DEFAULT_REFRESH_INTERVAL_SECONDS = 30
@@ -104,13 +105,27 @@ class ReviewTrackerApp:
     def _build_connection_bar(self, cfg: dict) -> None:
         header = ttk.Frame(self.root, style="Header.TFrame", padding=(20, 14, 20, 12))
         header.pack(fill="x")
+        
+        # Button frame for right-side buttons
+        button_frame = ttk.Frame(header, style="Header.TFrame")
+        button_frame.pack(side="right", anchor="n")
+        
         ttk.Button(
-            header,
+            button_frame,
             text=naming_interface.get_attr("b_settings"),
             width=14,
             style="Secondary.TButton",
             command=self.open_settings,
         ).pack(side="right", anchor="n")
+        
+        ttk.Button(
+            button_frame,
+            text=naming_interface.get_attr("b_bug_feature_request"),
+            width=32,
+            style="Secondary.TButton",
+            command=self.open_bug_feature_request,
+        ).pack(side="right", anchor="n", padx=(0, 8))
+        
         ttk.Label(header, text=naming_interface.get_attr("l_app_name"), style="Title.TLabel").pack(anchor="w")
         ttk.Label(header, text=naming_interface.get_attr("l_app_subtitle"), style="Subtitle.TLabel").pack(anchor="w", pady=(2, 10))
 
@@ -180,6 +195,9 @@ class ReviewTrackerApp:
 
     def open_settings(self) -> None:
         SettingsDialog(self.root, self.config, self._save_settings)
+
+    def open_bug_feature_request(self) -> None:
+        BugFeatureRequestDialog(self.root, self.current_user)
 
     def _on_filter_changed(self) -> None:
         """Handle checkbox changes for MR filtering."""

@@ -70,5 +70,17 @@
    "l_settings_token": "Token",
    "l_settings_beyond_compare_path": "Beyond compare path",
    "l_settings_refresh_interval_seconds": "Refresh interval seconds",
-   "l_settings_project_url": "Project url"
+   "l_settings_project_url": "Project url",
+   "b_bug_feature_request": "📝 Submit Feature Request / Bugfix",
+   "b_submit": "Submit",
+   "t_bug_feature_request": "Submit Bug Report or Feature Request",
+   "l_request_type": "Request Type:",
+   "l_description": "Description",
+   "l_submitted_by": "Submitted by: {user}",
+   "t_empty_request": "Empty request",
+   "m_empty_request": "Please enter a description for your request.",
+   "t_request_saved": "Request saved",
+   "m_request_saved": "Your request has been successfully saved.",
+   "t_save_error": "Save error",
+   "m_save_error": "Failed to save request:"
 }
