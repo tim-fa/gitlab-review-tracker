@@ -18,15 +18,15 @@ class CommitRangeDialog:
     """Modal dialog for selecting an inclusive range on a commit timeline.
 
     ``commits`` is expected in the newest-first order returned by the GitLab commits API.
-    The public result remains ``(first_sha, last_sha)`` in oldest-to-newest order.
+    Commits are displayed newest-first to match the main UI.
+    The public result is ``(oldest_sha, newest_sha)`` in oldest-to-newest order.
     """
 
     def __init__(self, parent: tk.Tk | tk.Toplevel, commits: list[dict]) -> None:
-        self.chronological = list(reversed(commits))
+        self.commits = commits  # Newest-first order, same as main.py display
         self.result: tuple[str, str] | None = None
         self.first_index = 0
-        self.last_index = len(self.chronological) - 1
-        self._active_handle = "first"
+        self.last_index = len(self.commits) - 1
 
         self.window = tk.Toplevel(parent)
         self.window.title(naming_interface.get_attr("t_select_commit_range"))
@@ -40,7 +40,7 @@ class CommitRangeDialog:
         content = ttk.Frame(self.window, style="Surface.TFrame", padding=20)
         content.pack(fill="both", expand=True)
         content.columnconfigure(0, weight=1)
-        content.rowconfigure(4, weight=1)
+        content.rowconfigure(3, weight=1)
 
         ttk.Label(content, text=naming_interface.get_attr("l_choose_commits"), style="Field.TLabel").grid(
             row=0, column=0, sticky="w"
@@ -54,27 +54,12 @@ class CommitRangeDialog:
         self._make_summary(summary, naming_interface.get_attr("l_from_older"), self.first_var, 0)
         self._make_summary(summary, naming_interface.get_attr("l_to_newer"), self.last_var, 1)
 
-        self.slider = tk.Canvas(
-            content,
-            height=72,
-            background=get_color("surface"),
-            highlightthickness=0,
-            takefocus=True,
-            cursor="hand2",
-        )
-        self.slider.grid(row=2, column=0, sticky="ew", pady=(2, 4))
-        self.slider.bind("<Configure>", lambda _event: self._draw_slider())
-        self.slider.bind("<Button-1>", self._start_drag)
-        self.slider.bind("<B1-Motion>", self._drag)
-        self.slider.bind("<Left>", lambda _event: self._nudge(-1))
-        self.slider.bind("<Right>", lambda _event: self._nudge(1))
-
         ttk.Label(content, text=naming_interface.get_attr("l_commit_direction"), style="Muted.TLabel").grid(
-            row=3, column=0, sticky="w", pady=(0, 6)
+            row=2, column=0, sticky="w", pady=(10, 6)
         )
 
         list_frame = ttk.Frame(content, style="Surface.TFrame")
-        list_frame.grid(row=4, column=0, sticky="nsew")
+        list_frame.grid(row=3, column=0, sticky="nsew")
         self.commit_list = tk.Listbox(
             list_frame,
             height=12,
@@ -89,7 +74,7 @@ class CommitRangeDialog:
             borderwidth=1,
             highlightthickness=0,
         )
-        for index, commit in enumerate(self.chronological):
+        for index, commit in enumerate(self.commits):
             self.commit_list.insert("end", self._format(commit, index))
         self.commit_list.bind("<Button-1>", self._on_commit_click)
         scrollbar = ttk.Scrollbar(
@@ -103,7 +88,7 @@ class CommitRangeDialog:
         scrollbar.pack(side="right", fill="y")
 
         actions = ttk.Frame(content, style="Surface.TFrame")
-        actions.grid(row=5, column=0, sticky="ew", pady=(12, 0))
+        actions.grid(row=4, column=0, sticky="ew", pady=(12, 0))
         self.count_var = tk.StringVar()
         ttk.Label(actions, textvariable=self.count_var, style="Muted.TLabel").pack(side="left")
         ttk.Button(actions, text=naming_interface.get_attr("b_cancel"), style="Secondary.TButton", command=self._cancel).pack(
@@ -114,7 +99,7 @@ class CommitRangeDialog:
         self._refresh_selection()
         tk_util.position_over_parent(self, parent, self.window)
         self.window.grab_set()
-        self.slider.focus_set()
+        self.commit_list.focus_set()
         self.window.wait_window()
 
     @staticmethod
@@ -125,126 +110,61 @@ class CommitRangeDialog:
         ttk.Label(frame, textvariable=variable, style="Field.TLabel").pack(anchor="w", pady=(2, 0))
 
     def _format(self, commit: dict, index: int) -> str:
-        marker = naming_interface.get_attr("v_oldest") if index == 0 else naming_interface.get_attr("v_newest") if index == len(self.chronological) - 1 else ""
+        marker = naming_interface.get_attr("v_newest") if index == 0 else naming_interface.get_attr("v_oldest") if index == len(self.commits) - 1 else ""
         return f"{index + 1:>3}.  {commit['id'][:8]}  {commit.get('title', '')}{marker}"
 
     def _summary(self, index: int) -> str:
-        commit = self.chronological[index]
+        commit = self.commits[index]
         title = commit.get("title", "")
         if len(title) > 48:
             title = f"{title[:45]}..."
         return f"{commit['id'][:8]}  {title}"
 
-    def _track_bounds(self) -> tuple[float, float]:
-        return 24.0, max(24.0, float(self.slider.winfo_width() - 24))
-
-    def _x_for_index(self, index: int) -> float:
-        left, right = self._track_bounds()
-        if len(self.chronological) == 1:
-            return (left + right) / 2
-        return left + (right - left) * index / (len(self.chronological) - 1)
-
-    def _index_for_x(self, x: float) -> int:
-        left, right = self._track_bounds()
-        if len(self.chronological) == 1 or right == left:
-            return 0
-        fraction = min(1.0, max(0.0, (x - left) / (right - left)))
-        return round(fraction * (len(self.chronological) - 1))
-
-    def _draw_slider(self) -> None:
-        self.slider.delete("all")
-        left, right = self._track_bounds()
-        y = 38
-        first_x = self._x_for_index(self.first_index)
-        last_x = self._x_for_index(self.last_index)
-        self.slider.create_line(left, y, right, y, fill=get_color("divider"), width=6)
-        self.slider.create_line(first_x, y, last_x, y, fill=get_color("accent"), width=6)
-
-        step = max(1, (len(self.chronological) - 1) // 12)
-        tick_indexes = set(range(0, len(self.chronological), step))
-        tick_indexes.add(len(self.chronological) - 1)
-        for index in tick_indexes:
-            x = self._x_for_index(index)
-            self.slider.create_line(x, y - 7, x, y + 7, fill=get_color("text_muted"), width=1)
-
-        self._draw_handle(first_x, y, naming_interface.get_attr("l_from"), self._active_handle == "first")
-        self._draw_handle(last_x, y, naming_interface.get_attr("l_to"), self._active_handle == "last")
-
-    def _draw_handle(self, x: float, y: float, label: str, active: bool) -> None:
-        radius = 9 if active else 8
-        self.slider.create_oval(
-            x - radius,
-            y - radius,
-            x + radius,
-            y + radius,
-            fill=get_color("accent") if active else get_color("surface"),
-            outline=get_color("accent"),
-            width=3,
-        )
-        self.slider.create_text(
-            x,
-            14,
-            text=label,
-            fill=get_color("text_primary") if active else get_color("text_muted"),
-            font=("Segoe UI", 8, "bold"),
-        )
-
-    def _start_drag(self, event: tk.Event) -> None:
-        self.slider.focus_set()
-        first_x = self._x_for_index(self.first_index)
-        last_x = self._x_for_index(self.last_index)
-        if first_x == last_x:
-            self._active_handle = "first" if event.x < first_x else "last"
-        else:
-            self._active_handle = "first" if abs(event.x - first_x) <= abs(event.x - last_x) else "last"
-        self._move_active_handle(self._index_for_x(event.x))
-
-    def _drag(self, event: tk.Event) -> None:
-        self._move_active_handle(self._index_for_x(event.x))
-
-    def _nudge(self, amount: int) -> str:
-        current = self.first_index if self._active_handle == "first" else self.last_index
-        self._move_active_handle(current + amount)
-        return "break"
-
-    def _move_active_handle(self, index: int) -> None:
-        index = min(len(self.chronological) - 1, max(0, index))
-        if self._active_handle == "first":
-            self.first_index = min(index, self.last_index)
-        else:
-            self.last_index = max(index, self.first_index)
-        self._refresh_selection()
-
     def _on_commit_click(self, event: tk.Event) -> str:
+        """Handle commit list click: single click selects one, Shift+click extends range."""
         index = self.commit_list.nearest(event.y)
-        distance_from_first = abs(index - self.first_index)
-        distance_from_last = abs(index - self.last_index)
-        self._active_handle = "first" if distance_from_first <= distance_from_last else "last"
-        self._move_active_handle(index)
+        
+        if event.state & 0x1:  # Shift key is pressed
+            # Shift+click: extend range to include clicked index (no gaps)
+            self.first_index = min(self.first_index, index)
+            self.last_index = max(self.last_index, index)
+        else:
+            # Regular click: select only this commit
+            self.first_index = index
+            self.last_index = index
+        
+        self._refresh_selection()
         return "break"
 
     def _refresh_selection(self) -> None:
-        self.first_var.set(self._summary(self.first_index))
-        self.last_var.set(self._summary(self.last_index))
-        selected_count = self.last_index - self.first_index + 1
+        # first_index and last_index are the numeric indices; first is the older commit (higher index)
+        older_index = max(self.first_index, self.last_index)
+        newer_index = min(self.first_index, self.last_index)
+        self.first_var.set(self._summary(older_index))
+        self.last_var.set(self._summary(newer_index))
+        selected_count = abs(self.last_index - self.first_index) + 1
         suffix = naming_interface.get_attr("v_commit") if selected_count == 1 else naming_interface.get_attr("v_commits")
         self.count_var.set(naming_interface.get_attr("v_selected_commits").format(count=selected_count, suffix=suffix))
 
         self.commit_list.selection_clear(0, "end")
-        for index in range(len(self.chronological)):
-            in_range = self.first_index <= index <= self.last_index
+        min_idx = min(self.first_index, self.last_index)
+        max_idx = max(self.first_index, self.last_index)
+        for index in range(len(self.commits)):
+            in_range = min_idx <= index <= max_idx
             is_endpoint = index in (self.first_index, self.last_index)
             background = get_color("selection_endpoint") if is_endpoint else get_color("selection") if in_range else get_color("surface")
             foreground = get_color("text_primary") if in_range else get_color("text_muted")
             self.commit_list.itemconfig(index, background=background, foreground=foreground)
-        visible_index = self.first_index if self._active_handle == "first" else self.last_index
+        visible_index = newer_index
         self.commit_list.see(visible_index)
-        self._draw_slider()
 
     def _ok(self) -> None:
+        # Return (oldest, newest) order regardless of which index is which
+        older_index = max(self.first_index, self.last_index)
+        newer_index = min(self.first_index, self.last_index)
         self.result = (
-            self.chronological[self.first_index]["id"],
-            self.chronological[self.last_index]["id"],
+            self.commits[older_index]["id"],
+            self.commits[newer_index]["id"],
         )
         self.window.destroy()
 
