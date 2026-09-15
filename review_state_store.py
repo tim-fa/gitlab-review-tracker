@@ -11,6 +11,7 @@ import os
 import re
 import tempfile
 from pathlib import Path
+import time
 from typing import Any
 
 DEFAULT_STATE_ROOT = Path(r"\\vi.vector.int\user\Tmp\CT_DEM\gitlab-review-tracker")
@@ -42,15 +43,19 @@ def load_state(project_path: str, mr_iid: int) -> dict[str, Any]:
 def save_state(project_path: str, mr_iid: int, state: dict[str, Any]) -> None:
     path = state_file(project_path, mr_iid)
     path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=".tmp_", suffix=".json")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(state, f, indent=2)
-        os.replace(tmp_name, path)
-    finally:
-        if os.path.exists(tmp_name):
-            os.remove(tmp_name)
 
+    counter = 0
+    while counter < 4:
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(state, f, indent=2)
+            break
+        except Exception:
+            counter += 1
+            if counter >= 4:
+                raise
+            time.sleep(0.5)
+            print("Retrying save due to exception... {}".format(counter))
 
 def _set_reviewer(state: dict[str, Any], kind: str, key: str, username: str, reviewed: bool) -> None:
     bucket = state.setdefault(kind, {})

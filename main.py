@@ -14,7 +14,6 @@ import webbrowser
 from pathlib import Path
 from tkinter import messagebox, ttk
 
-import git_helper
 import review_state_store
 from gitlab_client import GitLabClient, GitLabError, parse_project_url, get_gitlab_base_url_from_project_url, get_ssh_url_from_project_url
 import commit_comparator
@@ -29,7 +28,7 @@ naming_interface = NamingInterface()
 
 DEFAULT_BEYOND_COMPARE_PATH = r"C:\Program Files\Beyond Compare 4\BCompare.exe"
 
-program_version = "v1.4.0"
+program_version = "v1.4.1"
 
 CONFIG_PATH = Path.home() / ".gitlab_review_tracker.json"
 DEFAULT_REFRESH_INTERVAL_SECONDS = 30
