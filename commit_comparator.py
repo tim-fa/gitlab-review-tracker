@@ -84,6 +84,7 @@ def get_changes_compared_to_main(project_name: str, repo_url: str, commit_to_com
    print(f"[commit_comparator] Determining main commit at the time of {commit_to_compare_sha[:8]}")
    main_commit_at_compare_time = get_main_commit_at_compare_time(commit_to_compare_sha, base_repo)
 
+
    print(f"[commit_comparator] Main commit at the time of {commit_to_compare_sha[:8]} is {main_commit_at_compare_time[:8]}")
 
    base_sha = None
@@ -95,7 +96,6 @@ def get_changes_compared_to_main(project_name: str, repo_url: str, commit_to_com
       base_sha = git_helper.get_commit_before(commit_to_compare_sha, compare_repo)
       if not base_sha:
          raise ValueError(f"Could not determine the commit before {commit_to_compare_sha}")
-      git_helper.setup_repo_at_commit_merge_main(repo_url, base_sha, base_repo)
    else:
       print(f"[commit_comparator] Showing changes between commits")
       compare_sha = commit_to_compare_sha
@@ -103,8 +103,6 @@ def get_changes_compared_to_main(project_name: str, repo_url: str, commit_to_com
 
       if not base_sha:
          raise ValueError(f"Could not determine the commit before {previous_commit_sha}")
-      git_helper.setup_repo_at_commit_merge_main(repo_url, base_sha, base_repo)
-      git_helper.setup_repo_at_commit_merge_main(repo_url, commit_to_compare_sha, compare_repo)
 
 
    print(f"[commit_comparator] Checking out base commit {base_sha[:8]} and compare commit {compare_sha[:8]}")
