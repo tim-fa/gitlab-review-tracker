@@ -22,25 +22,6 @@ def delete_nonempty_directory(directory_path: str) -> None:
             os.rmdir(os.path.join(root, name))
       os.rmdir(directory_path)
 
-def get_main_commit_at_compare_time(commit_to_compare_sha: str, repo_path: str) -> str:
-
-   main_commits_with_timestamps = git_helper.get_commits_on_branch_with_timestamps("main", repo_path)
-   compare_commit_timestamp = git_helper.get_commit_timestamp(commit_to_compare_sha, repo_path)
-
-   main_commit_at_compare_time = None
-   for main_commit, main_timestamp in reversed(main_commits_with_timestamps):
-
-      print(f"Checking main commit {main_commit} with timestamp {main_timestamp} against compare commit {commit_to_compare_sha} timestamp {compare_commit_timestamp}")
-
-      if main_timestamp > compare_commit_timestamp:
-         break
-
-      main_commit_at_compare_time = main_commit
-
-   if not main_commit_at_compare_time:
-      raise ValueError(f"Could not determine the main commit at the time of {commit_to_compare_sha}")
-   return main_commit_at_compare_time
-
 
 def get_changes_compared_to_main(project_name: str, repo_url: str, commit_to_compare_sha: str, previous_commit_sha: str) -> Tuple[List[str], str, str]:
    """

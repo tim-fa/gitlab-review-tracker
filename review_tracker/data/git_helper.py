@@ -60,33 +60,6 @@ def merge_no_interaction(local_path: str, source_branch: str) -> None:
    print(f"[git_helper] Merging {source_branch} into {local_path}")
    subprocess.run(["git", "-C", local_path, "merge", "--no-edit", source_branch], check=False)
 
-def setup_repo_on_branch(repo_url: str, branch_name: str, local_path: str) -> None:
-   """
-   Set up a repository on a specific branch.
-
-   Args:
-      repo_url (str): The URL of the repository.
-      branch_name (str): The name of the branch to checkout.
-      local_path (str): The local path where the repository should be set up.
-   """
-   clone_or_update_repo(repo_url, local_path)
-   clean_repo(local_path)
-   checkout_branch_and_update(local_path, branch_name)
-
-def setup_repo_at_commit_merge_main(repo_url: str, commit_sha: str, local_path: str) -> None:
-   """
-   Set up a repository at a specific commit and merge the main branch into it.
-
-   Args:
-      repo_url (str): The URL of the repository.
-      commit_sha (str): The SHA of the commit to checkout.
-      local_path (str): The local path where the repository should be set up.
-   """
-   clone_or_update_repo(repo_url, local_path)
-   clean_repo(local_path)
-   checkout_commit(local_path, commit_sha)
-   merge_no_interaction(local_path, "main")
-
 def get_files_of_commit(commit_sha: str, local_path: str) -> List[str]:
    """
    Get the list of files changed in a specific commit.
@@ -193,3 +166,22 @@ def get_commits_on_branch_with_timestamps(branch_name: str, local_path: str) -> 
          sha, timestamp = line.split()
          commits.append((sha, int(timestamp)))
    return commits
+
+def get_main_commit_at_compare_time(commit_to_compare_sha: str, repo_path: str) -> str:
+
+   main_commits_with_timestamps = get_commits_on_branch_with_timestamps("main", repo_path)
+   compare_commit_timestamp = get_commit_timestamp(commit_to_compare_sha, repo_path)
+
+   main_commit_at_compare_time = None
+   for main_commit, main_timestamp in reversed(main_commits_with_timestamps):
+
+      print(f"Checking main commit {main_commit} with timestamp {main_timestamp} against compare commit {commit_to_compare_sha} timestamp {compare_commit_timestamp}")
+
+      if main_timestamp > compare_commit_timestamp:
+         break
+
+      main_commit_at_compare_time = main_commit
+
+   if not main_commit_at_compare_time:
+      raise ValueError(f"Could not determine the main commit at the time of {commit_to_compare_sha}")
+   return main_commit_at_compare_time
