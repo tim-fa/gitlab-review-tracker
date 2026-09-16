@@ -64,7 +64,6 @@ class ReviewTrackerApp:
         self._build_header()
         self._build_connection_bar(self.config)
         self._build_metrics()
-        self._build_toolbar()
         self._build_lists()
 
         project_url = self.project_url_var.get().strip()
@@ -297,30 +296,6 @@ class ReviewTrackerApp:
             card, text=label, font=(FONT, fsz(11)), text_color=get_color("text_muted"),
         ).pack(anchor="w", padx=sz(14), pady=(0, sz(12)))
 
-    def _build_toolbar(self) -> None:
-        toolbar = ctk.CTkFrame(self.root, fg_color="transparent")
-        toolbar.pack(fill="x", padx=sz(20), pady=(0, sz(10)))
-        self.beyond_compare_button = ctk.CTkButton(
-            toolbar,
-            text=naming_interface.get_attr("b_open_beyond_compare"),
-            font=(FONT, fsz(11)),
-            fg_color=get_color("secondary_button"),
-            hover_color=get_color("secondary_hover"),
-            text_color=get_color("text_secondary"),
-            height=sz(30),
-            command=self.on_open_beyond_compare,
-        )
-        self.open_mr_button = ctk.CTkButton(
-            toolbar,
-            text=naming_interface.get_attr("b_open_mr_in_gitlab"),
-            font=(FONT, fsz(11)),
-            fg_color=get_color("secondary_button"),
-            hover_color=get_color("secondary_hover"),
-            text_color=get_color("text_secondary"),
-            height=sz(30),
-            command=self.on_open_mr_in_gitlab,
-        )
-
     def _build_lists(self) -> None:
         body = ctk.CTkFrame(self.root, fg_color="transparent")
         body.pack(fill="both", expand=True, padx=sz(20), pady=(0, sz(20)))
@@ -328,18 +303,45 @@ class ReviewTrackerApp:
         body.grid_columnconfigure(1, weight=1)
         body.grid_rowconfigure(1, weight=1)
 
+        commits_header = ctk.CTkFrame(body, fg_color="transparent")
+        commits_header.grid(row=0, column=0, sticky="we", pady=(0, sz(6)))
+        commits_header.grid_columnconfigure(0, weight=1)
         ctk.CTkLabel(
-            body,
+            commits_header,
             text=naming_interface.get_attr("l_commits_panel"),
             font=(FONT, fsz(13), "bold"),
             text_color=get_color("text_secondary"),
-        ).grid(row=0, column=0, sticky="w", pady=(0, sz(6)))
+        ).grid(row=0, column=0, sticky="w")
+        self.beyond_compare_button = ctk.CTkButton(
+            commits_header,
+            text=naming_interface.get_attr("b_open_beyond_compare"),
+            font=(FONT, fsz(11)),
+            fg_color=get_color("secondary_button"),
+            hover_color=get_color("secondary_hover"),
+            text_color=get_color("text_secondary"),
+            height=sz(28),
+            command=self.on_open_beyond_compare,
+        )
+
+        files_header = ctk.CTkFrame(body, fg_color="transparent")
+        files_header.grid(row=0, column=1, sticky="we", padx=(sz(16), 0), pady=(0, sz(6)))
+        files_header.grid_columnconfigure(0, weight=1)
         ctk.CTkLabel(
-            body,
+            files_header,
             text=naming_interface.get_attr("l_changed_files_panel"),
             font=(FONT, fsz(13), "bold"),
             text_color=get_color("text_secondary"),
-        ).grid(row=0, column=1, sticky="w", padx=(sz(16), 0), pady=(0, sz(6)))
+        ).grid(row=0, column=0, sticky="w")
+        self.open_mr_button = ctk.CTkButton(
+            files_header,
+            text=naming_interface.get_attr("b_open_mr_in_gitlab"),
+            font=(FONT, fsz(11)),
+            fg_color=get_color("secondary_button"),
+            hover_color=get_color("secondary_hover"),
+            text_color=get_color("text_secondary"),
+            height=sz(28),
+            command=self.on_open_mr_in_gitlab,
+        )
 
         commits_panel = ctk.CTkFrame(body, corner_radius=sz(14), fg_color=get_color("surface"))
         commits_panel.grid(row=1, column=0, sticky="nsew", padx=(0, sz(8)))
@@ -466,8 +468,8 @@ class ReviewTrackerApp:
             self.root.after_cancel(self._refresh_job)
             self._refresh_job = None
 
-        self.open_mr_button.pack_forget()
-        self.beyond_compare_button.pack_forget()
+        self.open_mr_button.grid_remove()
+        self.beyond_compare_button.grid_remove()
         self.mr_display_var.set(naming_interface.get_attr("v_loading_merge_requests"))
         self._set_busy(True)
         self.status_var.set(naming_interface.get_attr("v_fetching_merge_requests"))
@@ -522,8 +524,8 @@ class ReviewTrackerApp:
 
         self._set_busy(True)
         self.status_var.set(naming_interface.get_attr("v_loading_mr").format(iid=mr_iid))
-        self.beyond_compare_button.pack_forget()
-        self.open_mr_button.pack(side="right", padx=(sz(8), 0))
+        self.beyond_compare_button.grid_remove()
+        self.open_mr_button.grid(row=0, column=1, sticky="e")
         threading.Thread(target=self._load_worker, args=(mr,), daemon=True).start()
 
     def _load_worker(self, mr: dict) -> None:
@@ -599,7 +601,7 @@ class ReviewTrackerApp:
         self.reviewed_file_count_var.set("0")
         self._set_busy(False)
         self.status_var.set(naming_interface.get_attr("v_loaded_commits").format(user=self.service.current_user, count=len(commits)))
-        self.beyond_compare_button.pack(side="right")
+        self.beyond_compare_button.grid(row=0, column=1, sticky="e")
         self._schedule_refresh()
 
     def _populate_files(self, sha: str, paths: list[str]) -> None:
