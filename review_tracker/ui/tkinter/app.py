@@ -26,7 +26,7 @@ naming_interface = NamingInterface()
 
 DEFAULT_BEYOND_COMPARE_PATH = r"C:\Program Files\Beyond Compare 4\BCompare.exe"
 
-program_version = "v1.5.2"
+program_version = "v1.5.3"
 
 DEFAULT_REFRESH_INTERVAL_SECONDS = 30
 

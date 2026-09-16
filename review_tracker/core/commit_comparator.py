@@ -63,7 +63,7 @@ def get_changes_compared_to_main(project_name: str, repo_url: str, commit_to_com
 
    # Get the most recent commit on main at the point in time commit_to_compare_sha was committed
    print(f"[commit_comparator] Determining main commit at the time of {commit_to_compare_sha[:8]}")
-   main_commit_at_compare_time = get_main_commit_at_compare_time(commit_to_compare_sha, base_repo)
+   main_commit_at_compare_time = git_helper.get_main_commit_at_compare_time(commit_to_compare_sha, base_repo)
 
 
    print(f"[commit_comparator] Main commit at the time of {commit_to_compare_sha[:8]} is {main_commit_at_compare_time[:8]}")
