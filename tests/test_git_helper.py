@@ -2,24 +2,32 @@ from operator import index
 import subprocess
 from unittest.mock import MagicMock
 import pytest
+import os
 
 from review_tracker.data import git_helper
 
-
 @pytest.fixture(autouse=False)
 def create_repo(tmp_path):
-
     main_hashes = []
     branch_hashes = []
+    commit_time = 1_700_000_000  # arbitrary fixed epoch second, incremented per commit
+
     def get_most_recent_commit_hash() -> str:
         result = subprocess.run(
             ["git", "rev-parse", "HEAD"],
-            cwd=repo_path,
-            check=True,
-            capture_output=True,
-            text=True,
+            cwd=repo_path, check=True, capture_output=True, text=True,
         )
         return result.stdout.strip()
+
+    def commit(message: str) -> str:
+        nonlocal commit_time
+        commit_time += 60  # strictly increasing, well beyond 1-second resolution
+        env = os.environ.copy()
+        env["GIT_AUTHOR_DATE"] = str(commit_time)
+        env["GIT_COMMITTER_DATE"] = str(commit_time)
+        subprocess.run(["git", "add", "."], cwd=repo_path, check=True)
+        subprocess.run(["git", "commit", "-m", message], cwd=repo_path, check=True, env=env)
+        return get_most_recent_commit_hash()
 
     repo_path = tmp_path / "repo"
     repo_path.mkdir()
@@ -28,47 +36,36 @@ def create_repo(tmp_path):
     subprocess.run(["git", "config", "user.name", "Test"], cwd=repo_path, check=True)
     (repo_path / "file.txt").write_text("content")
 
-
     (repo_path / "file1.txt").write_text("content1")
-    subprocess.run(["git", "add", "."], cwd=repo_path, check=True)
-    subprocess.run(["git", "commit", "-m", "main-commit-1"], cwd=repo_path, check=True)
-    main_hashes.append(get_most_recent_commit_hash())
+    main_hashes.append(commit("main-commit-1"))
 
     (repo_path / "file2.txt").write_text("content2")
-    subprocess.run(["git", "add", "."], cwd=repo_path, check=True)
-    subprocess.run(["git", "commit", "-m", "main-commit-2"], cwd=repo_path, check=True)
-    main_hashes.append(get_most_recent_commit_hash())
+    main_hashes.append(commit("main-commit-2"))
 
     (repo_path / "file3.txt").write_text("content3")
-    subprocess.run(["git", "add", "."], cwd=repo_path, check=True)
-    subprocess.run(["git", "commit", "-m", "main-commit-3"], cwd=repo_path, check=True)
-    main_hashes.append(get_most_recent_commit_hash())
-
-    (repo_path / "file4.txt").write_text("content4")
-    subprocess.run(["git", "add", "."], cwd=repo_path, check=True)
-    subprocess.run(["git", "commit", "-m", "main-commit-4"], cwd=repo_path, check=True)
-    main_hashes.append(get_most_recent_commit_hash())
+    main_hashes.append(commit("main-commit-3"))
 
     subprocess.run(["git", "checkout", "-b", "branch-1"], cwd=repo_path, check=True)
     (repo_path / "file1.txt").write_text("branch-content1")
-    subprocess.run(["git", "add", "."], cwd=repo_path, check=True)
-    subprocess.run(["git", "commit", "-m", "branch-1-commit-1"], cwd=repo_path, check=True)
-    branch_hashes.append(get_most_recent_commit_hash())
+    branch_hashes.append(commit("branch-1-commit-1"))
 
     subprocess.run(["git", "checkout", "main"], cwd=repo_path, check=True)
+    (repo_path / "file4.txt").write_text("content4")
+    main_hashes.append(commit("main-commit-4"))
 
     return repo_path, main_hashes, branch_hashes
 
 
-def test_clean_repo(create_repo):
-    repo_path, main_hashes, branch_hashes = create_repo
-
-    open(repo_path / "empty_file.txt", "w").close()
-    open(repo_path / "file1.txt", "w").close()
-
+def test_clean_repo(tmp_path, monkeypatch):
+    mock_run = MagicMock()
+    monkeypatch.setattr(git_helper.subprocess, "run", mock_run)
+    repo_path = (tmp_path / "repo")
     git_helper.clean_repo(str(repo_path))
-    assert not (repo_path / "empty_file.txt").exists()
-    assert open(repo_path / "file1.txt").read() == "content1"
+    
+    assert mock_run.call_count == 2
+    reset_args, clean_args = (call.args[0] for call in mock_run.call_args_list)
+    assert reset_args == ["git", "-C", str(repo_path), "reset", "--hard"]
+    assert clean_args == ["git", "-C", str(repo_path), "clean", "-fdx"]
 
 
 def test_clone_or_update_repo_clones_when_missing(tmp_path, monkeypatch):
@@ -160,3 +157,17 @@ def test_get_all_commits_on_branch_with_timestamp(create_repo):
 
     commits = git_helper.get_commits_on_branch_with_timestamps("main", str(repo_path))
     assert [commit[0] for commit in commits] == list(reversed(main_hashes))
+
+def test_get_main_commit_at_compare_time_branch_commit_main_checked_out(create_repo):
+    repo_path, main_hashes, branch_hashes = create_repo
+
+    main_commit_at_compare_time = git_helper.get_main_commit_at_compare_time(branch_hashes[0], str(repo_path))
+    assert main_commit_at_compare_time == main_hashes[2]
+
+def test_get_main_commit_at_compare_time_branch_commit_main_not_checked_out(create_repo):
+    repo_path, main_hashes, branch_hashes = create_repo
+
+    subprocess.run(["git", "-C", str(repo_path), "checkout", "branch-1"], check=True)
+
+    main_commit_at_compare_time = git_helper.get_main_commit_at_compare_time(branch_hashes[0], str(repo_path))
+    assert main_commit_at_compare_time == main_hashes[2]
