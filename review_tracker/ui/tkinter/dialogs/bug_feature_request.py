@@ -1,22 +1,15 @@
 """Bug/Feature Request Dialog for GitLab Review Tracker."""
 from __future__ import annotations
 
-import json
 import tkinter as tk
-from collections.abc import Callable
-from datetime import datetime
-from pathlib import Path
 from tkinter import messagebox, ttk
 
-import tk_util
-from naming_interface import NamingInterface
-from theme_integration import get_color
+from .. import tk_util
+from ..naming_interface import NamingInterface
+from ..theme_integration import get_color
+from review_tracker.data import feedback_request_store
 
 naming_interface = NamingInterface()
-
-# Network path for storing requests
-REQUEST_STORAGE_PATH = Path(r"\\vi.vector.int\user\Tmp\tfarahani")
-REQUEST_FILE_NAME = "bug_feature_requests.json"
 
 
 class BugFeatureRequestDialog:
@@ -114,7 +107,7 @@ class BugFeatureRequestDialog:
             return
 
         try:
-            self._save_request(description)
+            feedback_request_store.save_request(self.request_type_var.get(), description, self.current_user)
             messagebox.showinfo(
                 naming_interface.get_attr("t_request_saved"), naming_interface.get_attr("m_request_saved")
             )
@@ -123,41 +116,3 @@ class BugFeatureRequestDialog:
             messagebox.showerror(
                 naming_interface.get_attr("t_save_error"), f"{naming_interface.get_attr('m_save_error')}\n{str(exc)}"
             )
-
-    def _save_request(self, description: str) -> None:
-        """Save the request to the network storage file."""
-        # Ensure the directory exists
-        REQUEST_STORAGE_PATH.mkdir(parents=True, exist_ok=True)
-
-        request_file = REQUEST_STORAGE_PATH / REQUEST_FILE_NAME
-
-        # Create the request object
-        request_obj = {
-            "id": datetime.now().isoformat(),
-            "type": self.request_type_var.get(),
-            "description": description,
-            "username": self.current_user,
-            "status": "open",
-            "created_at": datetime.now().isoformat(),
-        }
-
-        # Load existing requests or create new list
-        requests = []
-        if request_file.exists():
-            try:
-                with open(request_file, "r", encoding="utf-8") as f:
-                    existing = json.load(f)
-                    if isinstance(existing, list):
-                        requests = existing
-                    elif isinstance(existing, dict):
-                        requests = [existing]
-            except (json.JSONDecodeError, IOError):
-                # If file is corrupted, start fresh
-                requests = []
-
-        # Append the new request
-        requests.append(request_obj)
-
-        # Write back to file
-        with open(request_file, "w", encoding="utf-8") as f:
-            json.dump(requests, f, indent=2, ensure_ascii=False)

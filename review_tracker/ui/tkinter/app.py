@@ -6,23 +6,21 @@ same state. Only read-only GitLab API calls are made.
 """
 from __future__ import annotations
 
-import hashlib
-import json
 import threading
 import tkinter as tk
 import webbrowser
 from pathlib import Path
 from tkinter import messagebox, ttk
 
-import review_state_store
-from gitlab_client import GitLabClient, GitLabError, parse_project_url, get_gitlab_base_url_from_project_url, get_ssh_url_from_project_url
-import commit_comparator
-from ui_commit_range_dialog import pick_commit_range
-from ui_settings import SettingsDialog
-from ui_bug_feature_request import BugFeatureRequestDialog
-from naming_interface import NamingInterface
-from theme_loader import initialize_theme_loader
-from theme_integration import apply_theme_to_styles, get_color
+from review_tracker.core.review_service import ReviewService
+from review_tracker.data.gitlab_client import parse_project_url
+from review_tracker.data.config_store import load_config, save_config, add_to_history
+from .dialogs.commit_range import pick_commit_range
+from .dialogs.settings import SettingsDialog
+from .dialogs.bug_feature_request import BugFeatureRequestDialog
+from .naming_interface import NamingInterface
+from .theme_loader import initialize_theme_loader
+from .theme_integration import apply_theme_to_styles, get_color
 
 naming_interface = NamingInterface()
 
@@ -30,31 +28,7 @@ DEFAULT_BEYOND_COMPARE_PATH = r"C:\Program Files\Beyond Compare 4\BCompare.exe"
 
 program_version = "v1.5.1"
 
-CONFIG_PATH = Path.home() / ".gitlab_review_tracker.json"
 DEFAULT_REFRESH_INTERVAL_SECONDS = 30
-MAX_PROJECT_HISTORY = 15
-
-
-def add_to_history(history: list[str], value: str) -> list[str]:
-    value = value.strip()
-    if not value:
-        return history
-    history = [v for v in history if v != value]
-    history.insert(0, value)
-    return history[:MAX_PROJECT_HISTORY]
-
-
-def load_config() -> dict:
-    if CONFIG_PATH.exists():
-        try:
-            return json.loads(CONFIG_PATH.read_text())
-        except json.JSONDecodeError:
-            return {}
-    return {}
-
-
-def save_config(cfg: dict) -> None:
-    CONFIG_PATH.write_text(json.dumps(cfg, indent=2))
 
 
 class ReviewTrackerApp:
@@ -65,20 +39,9 @@ class ReviewTrackerApp:
         root.minsize(900, 560)
         apply_theme_to_styles(root, font_name="Segoe UI")
 
-        self.client: GitLabClient | None = None
-        self.project_id: int | None = None
-        self.project_path: str | None = None
-        self.mr_iid: int | None = None
-        self.state: dict = {"files": {}, "commits": {}}
-        self.current_user: str | None = None
-        self.commit_files_cache: dict[str, list[str]] = {}
-        self.commit_is_merge: dict[str, bool] = {}
-        self.active_commit_sha: str | None = None
+        self.service = ReviewService()
         self._refresh_job: str | None = None
-        self.all_mrs: list[dict] = []
         self.mr_by_display: dict[str, dict] = {}
-        self.current_mr_url: str | None = None
-        self.current_commits: list[dict] = []
         self.commit_count_var = tk.StringVar(value="0")
         self.reviewed_commit_count_var = tk.StringVar(value="0")
         self.file_count_var = tk.StringVar(value="0")
@@ -196,20 +159,20 @@ class ReviewTrackerApp:
         SettingsDialog(self.root, self.config, self._save_settings)
 
     def open_bug_feature_request(self) -> None:
-        BugFeatureRequestDialog(self.root, self.current_user)
+        BugFeatureRequestDialog(self.root, self.service.current_user)
 
     def _on_filter_changed(self) -> None:
         """Handle checkbox changes for MR filtering."""
         self.show_closed_mrs = self.show_closed_var.get()
         self.show_merged_mrs = self.show_merged_var.get()
         # Re-fetch MRs if we have a project URL and token
-        if self.client and self.project_id:
+        if self.service.client and self.service.project_id:
             self.on_fetch_mrs()
 
     def _save_settings(self, settings: dict) -> None:
         self.config.update(settings)
         save_config(self.config)
-        if self.project_path and self.mr_iid:
+        if self.service.project_path and self.service.mr_iid:
             self._schedule_refresh()
 
     def _set_busy(self, busy: bool) -> None:
@@ -323,7 +286,7 @@ class ReviewTrackerApp:
             return
 
         try:
-            base_url, project_path = parse_project_url(project_url)
+            parse_project_url(project_url)
         except ValueError as exc:
             messagebox.showerror(naming_interface.get_attr("t_invalid_url"), str(exc))
             return
@@ -337,43 +300,37 @@ class ReviewTrackerApp:
             self.root.after_cancel(self._refresh_job)
             self._refresh_job = None
 
-        self.current_mr_url = None
         self.open_mr_button.pack_forget()
         self.beyond_compare_button.pack_forget()
         self.mr_display_var.set(naming_interface.get_attr("v_loading_merge_requests"))
         self._set_busy(True)
         self.status_var.set(naming_interface.get_attr("v_fetching_merge_requests"))
         threading.Thread(
-            target=self._fetch_mrs_worker, args=(base_url, token, project_path), daemon=True
+            target=self._fetch_mrs_worker, args=(project_url, token), daemon=True
         ).start()
 
-    def _fetch_mrs_worker(self, base_url: str, token: str, project_path: str) -> None:
+    def _fetch_mrs_worker(self, project_url: str, token: str) -> None:
         try:
-            client = GitLabClient(base_url, token)
-            project_id = client.project_id(project_path)
-            mrs = client.merge_requests(project_id, show_closed=self.show_closed_mrs, show_merged=self.show_merged_mrs)
-            user = client.current_user()["username"]
-        except (GitLabError, Exception) as exc:  # noqa: BLE001 - surface any failure to the UI
+            self.service.connect(project_url, token, self.show_closed_mrs, self.show_merged_mrs)
+        except Exception as exc:  # noqa: BLE001 - surface any failure to the UI
             message = str(exc)
             self.root.after(0, lambda: self._on_error(message))
             return
-
-        self.client = client
-        self.project_id = project_id
-        self.project_path = project_path
-        self.current_user = user
-        self.all_mrs = mrs
         self.root.after(0, self._on_mrs_fetched)
 
     def _on_mrs_fetched(self) -> None:
         self._set_busy(False)
         self._populate_mr_list()
-        self.status_var.set(naming_interface.get_attr("v_signed_in_mrs_found").format(user=self.current_user, count=len(self.all_mrs)))
+        self.status_var.set(
+            naming_interface.get_attr("v_signed_in_mrs_found").format(
+                user=self.service.current_user, count=len(self.service.all_mrs)
+            )
+        )
 
     def _populate_mr_list(self) -> None:
         self.mr_by_display = {}
         values = []
-        for mr in sorted(self.all_mrs, key=lambda mr: int(mr["iid"]), reverse=True):
+        for mr in sorted(self.service.all_mrs, key=lambda mr: int(mr["iid"]), reverse=True):
             display = f"!{mr['iid']} {mr.get('title', '')} [{mr.get('state', '')}]"
             self.mr_by_display[display] = mr
             values.append(display)
@@ -389,12 +346,9 @@ class ReviewTrackerApp:
 
     def on_mr_selected(self, _event=None) -> None:
         mr = self.mr_by_display.get(self.mr_display_var.get())
-        if not mr or not (self.client and self.project_id and self.project_path):
+        if not mr or not (self.service.client and self.service.project_id and self.service.project_path):
             return
         mr_iid = int(mr["iid"])
-        self.current_mr_url = mr.get("web_url") or (
-            f"{self.client.base_url}/{self.project_path}/-/merge_requests/{mr_iid}"
-        )
 
         if self._refresh_job is not None:
             self.root.after_cancel(self._refresh_job)
@@ -404,23 +358,16 @@ class ReviewTrackerApp:
         self.status_var.set(naming_interface.get_attr("v_loading_mr").format(iid=mr_iid))
         self.beyond_compare_button.pack_forget()
         self.open_mr_button.pack(side="right", padx=(8, 0))
-        threading.Thread(target=self._load_worker, args=(mr_iid,), daemon=True).start()
+        threading.Thread(target=self._load_worker, args=(mr,), daemon=True).start()
 
-    def _load_worker(self, mr_iid: int) -> None:
+    def _load_worker(self, mr: dict) -> None:
         try:
-            commits = self.client.commits(self.project_id, mr_iid)
-            state = review_state_store.load_state(self.project_path, mr_iid)
-        except (GitLabError, Exception) as exc:  # noqa: BLE001 - surface any failure to the UI
+            self.service.select_merge_request(mr)
+        except Exception as exc:  # noqa: BLE001 - surface any failure to the UI
             message = str(exc)
             self.root.after(0, lambda: self._on_error(message))
             return
-
-        self.mr_iid = mr_iid
-        self.state = state
-        self.commit_files_cache = {}
-        self.active_commit_sha = None
-        self.current_commits = commits
-        self.root.after(0, lambda: self._populate(commits))
+        self.root.after(0, lambda: self._populate(self.service.current_commits))
 
     def _on_error(self, message: str) -> None:
         self._set_busy(False)
@@ -428,17 +375,16 @@ class ReviewTrackerApp:
         messagebox.showerror(naming_interface.get_attr("l_app_name"), message)
 
     def on_open_mr_in_gitlab(self) -> None:
-        if self.current_mr_url:
-            webbrowser.open(self.current_mr_url)
+        if self.service.current_mr_url:
+            webbrowser.open(self.service.current_mr_url)
 
     def on_open_beyond_compare(self) -> None:
-        if not (self.client and self.project_path and self.current_commits):
+        if not (self.service.client and self.service.project_path and self.service.current_commits):
             return
-        result = pick_commit_range(self.root, self.current_commits)
+        result = pick_commit_range(self.root, self.service.current_commits)
         if not result:
             return
         first_sha, last_sha = result
-        print(result)
         beyond_compare_path = self.config.get("beyond_compare_path", "").strip()
         if not beyond_compare_path:
             messagebox.showerror(naming_interface.get_attr("t_beyond_compare"), naming_interface.get_attr("m_beyond_compare_path"))
@@ -452,13 +398,7 @@ class ReviewTrackerApp:
 
     def _open_beyond_compare_worker(self, first_sha: str, last_sha: str, beyond_compare_path: str) -> None:
         try:
-           commit_comparator.open_diff_in_beyond_compare(
-                project_name=self.project_path.split("/")[-1],
-                repo_url=get_ssh_url_from_project_url(self.project_url_var.get()),
-               commit_to_compare_sha=last_sha,
-               previous_commit_sha=first_sha,
-               beyond_compare_path=beyond_compare_path,
-           )
+            self.service.open_beyond_compare(first_sha, last_sha, beyond_compare_path)
         except Exception as exc:  # noqa: BLE001 - surface any failure to the UI
             message = str(exc)
             self.root.after(0, lambda: self._on_error(message))
@@ -467,20 +407,18 @@ class ReviewTrackerApp:
 
     def _on_beyond_compare_done(self) -> None:
         self._set_busy(False)
-        self.status_var.set(naming_interface.get_attr("v_signed_in").format(user=self.current_user))
+        self.status_var.set(naming_interface.get_attr("v_signed_in").format(user=self.service.current_user))
 
     def _populate(self, commits: list[dict]) -> None:
         self.commits_tree.delete(*self.commits_tree.get_children())
-        self.commit_is_merge = {}
         reviewed_commits = 0
         for commit in commits:
             sha = commit["id"]
-            is_merge = len(commit.get("parent_ids") or []) > 1
-            self.commit_is_merge[sha] = is_merge
+            is_merge = self.service.commit_is_merge.get(sha, False)
             title = commit.get("title", "") + (naming_interface.get_attr("v_merge_commit") if is_merge else "")
             author_data = commit.get("author") or {}
             author = commit.get("author_name") or author_data.get("name") or author_data.get("username", "")
-            reviewers = self.state.get("commits", {}).get(sha, [])
+            reviewers = self.service.state.get("commits", {}).get(sha, [])
             reviewed_commits += bool(reviewers)
             tags = (("merge",) if is_merge else ()) + (("reviewed",) if reviewers else ())
             self.commits_tree.insert(
@@ -493,7 +431,7 @@ class ReviewTrackerApp:
         self.file_count_var.set("0")
         self.reviewed_file_count_var.set("0")
         self._set_busy(False)
-        self.status_var.set(naming_interface.get_attr("v_loaded_commits").format(user=self.current_user, count=len(commits)))
+        self.status_var.set(naming_interface.get_attr("v_loaded_commits").format(user=self.service.current_user, count=len(commits)))
         self.beyond_compare_button.pack(side="right")
         self._schedule_refresh()
 
@@ -501,7 +439,7 @@ class ReviewTrackerApp:
         self.files_tree.delete(*self.files_tree.get_children())
         reviewed_files = 0
         for path in paths:
-            reviewers = self.state.get("files", {}).get(review_state_store.file_key(sha, path), [])
+            reviewers = self.service.state.get("files", {}).get(self.service.file_key(sha, path), [])
             tags = ("reviewed",) if reviewers else ()
             reviewed_files += bool(reviewers)
             self.files_tree.insert(
@@ -512,11 +450,11 @@ class ReviewTrackerApp:
 
     def on_commit_selected(self, _event=None) -> None:
         selection = self.commits_tree.selection()
-        if not selection or not self.client:
+        if not selection or not self.service.client:
             return
         sha = selection[0]
-        self.active_commit_sha = sha
-        cached = self.commit_files_cache.get(sha)
+        self.service.active_commit_sha = sha
+        cached = self.service.commit_files_cache.get(sha)
         if cached is not None:
             self._show_commit_files(sha, cached)
             return
@@ -524,22 +462,23 @@ class ReviewTrackerApp:
 
     def _fetch_commit_files_worker(self, sha: str) -> None:
         try:
-            paths = self.client.commit_files(self.project_id, sha)
+            paths = self.service.fetch_commit_files(sha)
         except Exception as exc:  # noqa: BLE001 - surface any failure to the UI
             message = str(exc)
             self.root.after(0, lambda: self._on_error(message))
             return
-        self.commit_files_cache[sha] = paths
         self.root.after(0, lambda: self._show_commit_files(sha, paths))
 
     def _show_commit_files(self, sha: str, paths: list[str]) -> None:
-        if self.active_commit_sha != sha:
+        if self.service.active_commit_sha != sha:
             return  # user selected a different commit while this was loading
         self._populate_files(sha, paths)
 
     def on_toggle_commit(self) -> None:
         selection = self.commits_tree.selection()
-        if not selection or not (self.client and self.project_path and self.mr_iid and self.current_user):
+        if not selection or not (
+            self.service.client and self.service.project_path and self.service.mr_iid and self.service.current_user
+        ):
             return
         sha = selection[0]
         self.status_var.set(naming_interface.get_attr("v_updating"))
@@ -547,35 +486,35 @@ class ReviewTrackerApp:
 
     def _toggle_commit_worker(self, sha: str) -> None:
         try:
-            paths = self.commit_files_cache.get(sha)
-            if paths is None:
-                paths = self.client.commit_files(self.project_id, sha)
-                self.commit_files_cache[sha] = paths
-            state = review_state_store.toggle_commit_with_files(self.project_path, self.mr_iid, sha, paths, self.current_user)
+            self.service.toggle_commit(sha)
+            paths = self.service.commit_files_cache.get(sha, [])
         except Exception as exc:  # noqa: BLE001 - surface any failure to the UI
             message = str(exc)
             self.root.after(0, lambda: self._on_error(message))
             return
-        self.state = state
         self.root.after(0, lambda: self._on_commit_toggled(sha, paths))
 
     def _on_commit_toggled(self, sha: str, paths: list[str]) -> None:
         self._refresh_row(self.commits_tree, sha, "commits", sha)
         for path in paths:
             if self.files_tree.exists(path):
-                self._refresh_row(self.files_tree, path, "files", review_state_store.file_key(sha, path))
+                self._refresh_row(self.files_tree, path, "files", self.service.file_key(sha, path))
         self._update_metrics()
-        self.status_var.set(naming_interface.get_attr("v_signed_in").format(user=self.current_user))
+        self.status_var.set(naming_interface.get_attr("v_signed_in").format(user=self.service.current_user))
 
     def on_toggle_file(self) -> None:
         selection = self.files_tree.selection()
         if not selection or not (
-            self.client and self.project_path and self.mr_iid and self.current_user and self.active_commit_sha
+            self.service.client
+            and self.service.project_path
+            and self.service.mr_iid
+            and self.service.current_user
+            and self.service.active_commit_sha
         ):
             return
         path = selection[0]
         self.status_var.set(naming_interface.get_attr("v_updating"))
-        threading.Thread(target=self._toggle_file_worker, args=(self.active_commit_sha, path), daemon=True).start()
+        threading.Thread(target=self._toggle_file_worker, args=(self.service.active_commit_sha, path), daemon=True).start()
 
     def on_files_tree_double_click(self, event: tk.Event) -> None:
         if self.files_tree.identify_column(event.x) == "#3":
@@ -592,13 +531,11 @@ class ReviewTrackerApp:
             self.open_file_diff(path)
 
     def open_file_diff(self, path: str) -> None:
-        if not (self.client and self.project_path and self.mr_iid and self.active_commit_sha):
+        if not (
+            self.service.client and self.service.project_path and self.service.mr_iid and self.service.active_commit_sha
+        ):
             return
-        sha = self.active_commit_sha
-        # GitLab anchors file diffs by the SHA1 hex digest of the file path.
-        anchor = hashlib.sha1(path.encode("utf-8")).hexdigest()
-        url = f"{self.client.base_url}/{self.project_path}/-/merge_requests/{self.mr_iid}/diffs?commit_id={sha}#diff-content-{anchor}"
-        webbrowser.open(url)
+        webbrowser.open(self.service.merge_request_diff_url(path))
 
     def on_commits_tree_right_click(self, event: tk.Event) -> None:
         sha = self.commits_tree.identify_row(event.y)
@@ -616,7 +553,7 @@ class ReviewTrackerApp:
 
     def _compare_selected_commit_to_main(self) -> None:
         selection = self.commits_tree.selection()
-        if not selection or not (self.client and self.project_path):
+        if not selection or not (self.service.client and self.service.project_path):
             return
         sha = selection[0]
         self._set_busy(True)
@@ -627,12 +564,7 @@ class ReviewTrackerApp:
 
     def _compare_to_main_worker(self, sha: str) -> None:
         try:
-            diff_files, _, _ = commit_comparator.get_changes_compared_to_main(
-                project_name=self.project_path.split("/")[-1],
-                repo_url=get_ssh_url_from_project_url(self.project_url_var.get()),
-                commit_to_compare_sha=sha,
-                previous_commit_sha=sha
-            )
+            diff_files = self.service.compare_commit_to_main(sha)
         except Exception as exc:  # noqa: BLE001 - surface any failure to the UI
             message = str(exc)
             self.root.after(0, lambda: self._on_error(message))
@@ -641,7 +573,7 @@ class ReviewTrackerApp:
 
     def _on_compare_to_main_done(self, sha: str, diff_files: list[str]) -> None:
         self._set_busy(False)
-        self.status_var.set(naming_interface.get_attr("v_signed_in").format(user=self.current_user))
+        self.status_var.set(naming_interface.get_attr("v_signed_in").format(user=self.service.current_user))
         if not diff_files:
             messagebox.showinfo(naming_interface.get_attr("t_no_differences"), naming_interface.get_attr("m_no_differences"))
             return
@@ -673,7 +605,7 @@ class ReviewTrackerApp:
             foreground=get_color("row_reviewed_fg")
         )
         for path in diff_files:
-            reviewers = self.state.get("files", {}).get(review_state_store.file_key(sha, path), [])
+            reviewers = self.service.state.get("files", {}).get(self.service.file_key(sha, path), [])
             tags = ("reviewed",) if reviewers else ()
             tree.insert("", "end", iid=path, values=(path, ", ".join(reviewers), naming_interface.get_attr("v_view_diff")), tags=tags)
 
@@ -708,46 +640,39 @@ class ReviewTrackerApp:
 
     def _toggle_diff_file_reviewed(self, sha: str, tree: ttk.Treeview) -> None:
         selection = tree.selection()
-        if not selection or not (self.project_path and self.mr_iid and self.current_user):
+        if not selection or not (self.service.project_path and self.service.mr_iid and self.service.current_user):
             return
         path = selection[0]
         threading.Thread(target=self._toggle_file_worker, args=(sha, path, tree), daemon=True).start()
 
     def _open_diff_vs_main(self, sha: str, path: str) -> None:
-        # GitLab anchors commit diffs by the SHA1 hex digest of the file path.
-        anchor = hashlib.sha1(path.encode("utf-8")).hexdigest()
-        url = f"{self.client.base_url}/{self.project_path}/-/commit/{sha}#diff-content-{anchor}"
-        webbrowser.open(url)
+        webbrowser.open(self.service.commit_diff_url(sha, path))
 
     def _toggle_file_worker(self, sha: str, path: str, tree: ttk.Treeview | None = None) -> None:
         try:
-            key = review_state_store.file_key(sha, path)
-            state = review_state_store.toggle(self.project_path, self.mr_iid, "files", key, self.current_user)
-            commit_paths = self.commit_files_cache.get(sha, [])
-            state = review_state_store.sync_commit_from_files(self.project_path, self.mr_iid, sha, commit_paths)
+            self.service.toggle_file(sha, path)
         except Exception as exc:  # noqa: BLE001 - surface any failure to the UI
             message = str(exc)
             self.root.after(0, lambda: self._on_error(message))
             return
-        self.state = state
         self.root.after(0, lambda: self._on_file_toggled(sha, path, tree))
 
     def _on_file_toggled(self, sha: str, path: str, tree: ttk.Treeview | None = None) -> None:
         # ugly but keep for now
         if tree is not None and tree.exists(path):
-            self._refresh_row(tree, path, "files", review_state_store.file_key(sha, path))
+            self._refresh_row(tree, path, "files", self.service.file_key(sha, path))
         if self.files_tree.exists(path):
-            self._refresh_row(self.files_tree, path, "files", review_state_store.file_key(sha, path))
+            self._refresh_row(self.files_tree, path, "files", self.service.file_key(sha, path))
         self._refresh_row(self.commits_tree, sha, "commits", sha)
         self._update_metrics()
-        self.status_var.set(naming_interface.get_attr("v_signed_in").format(user=self.current_user))
+        self.status_var.set(naming_interface.get_attr("v_signed_in").format(user=self.service.current_user))
 
     def _refresh_row(self, tree: ttk.Treeview, item_id: str, kind: str, key: str) -> None:
         if not tree.exists(item_id):
             return
-        reviewers = self.state.get(kind, {}).get(key, [])
+        reviewers = self.service.state.get(kind, {}).get(key, [])
         tree.set(item_id, "reviewers", ", ".join(reviewers))
-        is_merge = kind == "commits" and self.commit_is_merge.get(item_id, False)
+        is_merge = kind == "commits" and self.service.commit_is_merge.get(item_id, False)
         tags = (("merge",) if is_merge else ()) + (("reviewed",) if reviewers else ())
         tree.item(item_id, tags=tags)
 
@@ -771,25 +696,26 @@ class ReviewTrackerApp:
         self._refresh_job = self.root.after(interval_seconds * 1000, self._auto_refresh)
 
     def _auto_refresh(self) -> None:
-        if not (self.project_path and self.mr_iid):
+        if not (self.service.project_path and self.service.mr_iid):
             return
         threading.Thread(target=self._refresh_worker, daemon=True).start()
 
     def _refresh_worker(self) -> None:
         try:
-            state = review_state_store.load_state(self.project_path, self.mr_iid)
+            self.service.refresh_state()
         except Exception:  # noqa: BLE001 - a transient network hiccup shouldn't interrupt the app
             self.root.after(0, self._schedule_refresh)
             return
-        self.root.after(0, lambda: self._apply_refreshed_state(state))
+        self.root.after(0, self._apply_refreshed_state)
 
-    def _apply_refreshed_state(self, state: dict) -> None:
-        self.state = state
+    def _apply_refreshed_state(self) -> None:
         for sha in self.commits_tree.get_children():
             self._refresh_row(self.commits_tree, sha, "commits", sha)
-        if self.active_commit_sha is not None:
+        if self.service.active_commit_sha is not None:
             for path in self.files_tree.get_children():
-                self._refresh_row(self.files_tree, path, "files", review_state_store.file_key(self.active_commit_sha, path))
+                self._refresh_row(
+                    self.files_tree, path, "files", self.service.file_key(self.service.active_commit_sha, path)
+                )
         self._update_metrics()
         self._schedule_refresh()
 

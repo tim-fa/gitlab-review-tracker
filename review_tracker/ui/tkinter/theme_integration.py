@@ -8,7 +8,7 @@ from __future__ import annotations
 import tkinter as tk
 from tkinter import ttk
 
-from theme_loader import get_theme_loader
+from .theme_loader import get_theme_loader
 
 
 def apply_theme_to_styles(root: tk.Tk, font_name: str = "Segoe UI") -> None:

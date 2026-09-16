@@ -4,9 +4,9 @@ from __future__ import annotations
 import tkinter as tk
 from tkinter import ttk
 
-import tk_util
-from naming_interface import NamingInterface
-from theme_integration import get_color
+from .. import tk_util
+from ..naming_interface import NamingInterface
+from ..theme_integration import get_color
 
 naming_interface = NamingInterface()
 

@@ -2,7 +2,7 @@ import shutil
 import subprocess
 import threading
 
-import git_helper
+from review_tracker.data import git_helper
 import filecmp
 import os
 from typing import List, Tuple
