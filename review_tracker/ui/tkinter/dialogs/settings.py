@@ -8,97 +8,101 @@ from __future__ import annotations
 
 import tkinter as tk
 from collections.abc import Callable
-from tkinter import ttk
+
+import customtkinter as ctk
+
 from .. import tk_util
 from ..naming_interface import NamingInterface
 from ..theme_integration import get_color
+from ..ctk_style import FONT, sz, fsz
 
 naming_interface = NamingInterface()
 
+
 class SettingsDialog:
-   """Modal editor for locally stored application settings."""
+    """Modal editor for locally stored application settings."""
 
-   def __init__(self, parent: tk.Tk, config: dict, on_save: Callable[[dict], None]) -> None:
-      self._on_save = on_save
-      self.window = tk.Toplevel(parent)
-      self.window.title(naming_interface.get_attr("t_settings"))
-      self.window.transient(parent)
-      self.window.resizable(False, False)
-      self.window.configure(background=get_color("background"))
-      self.window.protocol("WM_DELETE_WINDOW", self.window.destroy)
+    def __init__(self, parent: ctk.CTk, config: dict, on_save: Callable[[dict], None]) -> None:
+        self._on_save = on_save
+        self.window = ctk.CTkToplevel(parent)
+        self.window.title(naming_interface.get_attr("t_settings"))
+        self.window.transient(parent)
+        self.window.resizable(False, False)
+        self.window.configure(fg_color=get_color("background"))
+        self.window.protocol("WM_DELETE_WINDOW", self.window.destroy)
 
-      self.fields = []
-      self.multiline_widgets: dict[str, tk.Text] = {}
+        self.fields = []
+        self.multiline_widgets: dict[str, ctk.CTkTextbox] = {}
 
-      for key, value in config.items():
-         if isinstance(value, str):
-            self.fields.append(
-               (key, naming_interface.get_attr(f"l_settings_{key}"), tk.StringVar(value=value), key == "token", "\n" in value)
+        for key, value in config.items():
+            if isinstance(value, str):
+                self.fields.append(
+                    (key, naming_interface.get_attr(f"l_settings_{key}"), tk.StringVar(value=value), key == "token", "\n" in value)
+                )
+
+        self._build_fields()
+        tk_util.position_over_parent(self, parent, self.window)
+        self.window.grab_set()
+        self.window.focus_set()
+
+    def _build_fields(self) -> None:
+        content = ctk.CTkFrame(self.window, corner_radius=sz(14), fg_color=get_color("surface"))
+        content.pack(fill="both", expand=True, padx=sz(16), pady=sz(16))
+        content.columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            content, text=naming_interface.get_attr("l_gitlab"), font=(FONT, fsz(18), "bold"),
+            text_color=get_color("text_primary"), anchor="w",
+        ).grid(row=0, column=0, sticky="w", padx=sz(18), pady=(sz(18), 0))
+        ctk.CTkLabel(
+            content, text=naming_interface.get_attr("l_connection_settings"), font=(FONT, fsz(11)),
+            text_color=get_color("text_muted"), anchor="w",
+        ).grid(row=1, column=0, sticky="w", padx=sz(18), pady=(sz(2), sz(14)))
+
+        row = 2
+        for key, label, variable, secret, multiline in self.fields:
+            ctk.CTkLabel(
+                content, text=label, font=(FONT, fsz(11), "bold"), text_color=get_color("text_muted"), anchor="w",
+            ).grid(row=row, column=0, sticky="w", padx=sz(18))
+            if multiline:
+                entry = ctk.CTkTextbox(content, height=sz(110), width=sz(520), wrap="word")
+                entry.grid(row=row + 1, column=0, sticky="we", padx=sz(18), pady=(sz(4), sz(12)))
+                entry.insert("1.0", variable.get())
+                self.multiline_widgets[key] = entry
+            else:
+                entry = ctk.CTkEntry(
+                    content, textvariable=variable, show="*" if secret else "", width=sz(520), height=sz(32),
+                )
+                entry.grid(row=row + 1, column=0, sticky="we", padx=sz(18), pady=(sz(4), sz(12)))
+            if row == 2:
+                entry.focus_set()
+            row += 2
+
+        actions = ctk.CTkFrame(content, fg_color="transparent")
+        actions.grid(row=row, column=0, sticky="e", padx=sz(18), pady=(sz(8), sz(18)))
+        ctk.CTkButton(
+            actions, text=naming_interface.get_attr("b_cancel"), width=sz(90), height=sz(32), font=(FONT, fsz(11)),
+            fg_color=get_color("secondary_button"), hover_color=get_color("secondary_hover"),
+            text_color=get_color("text_secondary"), command=self.window.destroy,
+        ).pack(side="left", padx=(0, sz(6)))
+        ctk.CTkButton(
+            actions, text=naming_interface.get_attr("b_save"), width=sz(90), height=sz(32), font=(FONT, fsz(11)),
+            command=self._save,
+        ).pack(side="left")
+
+        self.window.bind("<Return>", lambda _event: self._save())
+        self.window.bind("<Escape>", lambda _event: self.window.destroy())
+
+    def _settings_to_save(self) -> dict:
+        settings = {}
+        for key, _label, variable, _secret, multiline in self.fields:
+            settings[key] = (
+                self.multiline_widgets[key].get("1.0", "end-1c").strip()
+                if multiline
+                else variable.get().strip()
             )
+        return settings
 
-      self._build_fields()
-      tk_util.position_over_parent(self, parent, self.window)
-      self.window.grab_set()
-      self.window.focus_set()
-
-   def _build_fields(self) -> None:
-      content = ttk.Frame(self.window, style="Surface.TFrame", padding=20)
-      content.pack(fill="both", expand=True, padx=16, pady=16)
-
-      ttk.Label(content, text=naming_interface.get_attr("l_gitlab"), style="Title.TLabel").grid(row=0, column=0, sticky="w")
-      ttk.Label(content, text=naming_interface.get_attr("l_connection_settings"), style="Subtitle.TLabel").grid(
-         row=1, column=0, sticky="w", pady=(2, 16)
-      )
-
-      row = 2
-      for key, label, variable, secret, multiline in self.fields:
-         ttk.Label(content, text=label, style="Field.TLabel").grid(row=row, column=0, sticky="w")
-         if multiline:
-            text_frame = ttk.Frame(content, style="Surface.TFrame")
-            text_frame.grid(row=row + 1, column=0, sticky="we", pady=(4, 12))
-            entry = tk.Text(text_frame, height=5, width=64, wrap="word")
-            entry.insert("1.0", variable.get())
-            scrollbar = ttk.Scrollbar(text_frame, orient="vertical", command=entry.yview)
-            entry.configure(yscrollcommand=scrollbar.set)
-            entry.pack(side="left", fill="both", expand=True)
-            scrollbar.pack(side="right", fill="y")
-            self.multiline_widgets[key] = entry
-         else:
-            entry = ttk.Entry(content, textvariable=variable, show="*" if secret else "", width=64)
-            entry.grid(row=row + 1, column=0, sticky="we", pady=(4, 12))
-         if row == 2:
-            entry.focus_set()
-         row += 2
-
-      actions = ttk.Frame(content, style="Surface.TFrame")
-      actions.grid(row=row, column=0, sticky="e", pady=(8, 0))
-      ttk.Button(actions, text=naming_interface.get_attr("b_cancel"), style="Secondary.TButton", command=self.window.destroy).pack(
-         side="left", padx=(0, 6)
-      )
-      ttk.Button(actions, text=naming_interface.get_attr("b_save"), style="Accent.TButton", command=self._save).pack(side="left")
-
-      content.columnconfigure(0, weight=1)
-      self.window.bind("<Return>", lambda _event: self._save())
-      self.window.bind("<Escape>", lambda _event: self.window.destroy())
-
-   def _position_over_parent(self, parent: tk.Tk) -> None:
-      self.window.update_idletasks()
-      x = parent.winfo_x() + (parent.winfo_width() - self.window.winfo_width()) // 2
-      y = parent.winfo_y() + (parent.winfo_height() - self.window.winfo_height()) // 2
-      x = max(0, min(x, self.window.winfo_screenwidth() - self.window.winfo_width()))
-      y = max(0, min(y, self.window.winfo_screenheight() - self.window.winfo_height()))
-      self.window.geometry(f"+{x}+{y}")
-
-   def _settings_to_save(self) -> dict:
-      settings = {}
-      for key, _label, variable, _secret, multiline in self.fields:
-         settings[key] = (
-            self.multiline_widgets[key].get("1.0", "end-1c").strip()
-            if multiline
-            else variable.get().strip()
-         )
-      return settings
-
-   def _save(self) -> None:
-      self._on_save(self._settings_to_save())
-      self.window.destroy()
+    def _save(self) -> None:
+        self._on_save(self._settings_to_save())
+        self.window.destroy()

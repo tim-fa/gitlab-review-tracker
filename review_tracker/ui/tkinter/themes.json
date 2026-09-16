@@ -41,5 +41,48 @@
       "card_label": 8,
       "button": ["9", "bold"]
     }
+  },
+  "dark": {
+    "name": "dark",
+    "display_name": "Dark",
+    "colors": {
+      "background": "#181a1f",
+      "surface": "#212328",
+      "field_background": "#24262c",
+      "text_primary": "#e6e8eb",
+      "text_secondary": "#c7cad0",
+      "text_muted": "#9aa1ac",
+      "accent": "#f97362",
+      "accent_hover": "#fb8b78",
+      "accent_disabled": "#7a4a42",
+      "secondary_button": "#24262c",
+      "secondary_hover": "#2c2f36",
+      "selection": "#3a2a26",
+      "selection_endpoint": "#5a3a32",
+      "row_merge_bg": "#3a3424",
+      "row_merge_fg": "#d9b877",
+      "row_reviewed_bg": "#173322",
+      "row_reviewed_fg": "#43c07a",
+      "divider": "#3a3d44",
+      "scrollbar_bg": "#33363c",
+      "scrollbar_trough": "#202226",
+      "scrollbar_arrow": "#7d838c",
+      "scrollbar_active": "#45484f",
+      "progressbar_bg": "#f97362",
+      "progressbar_trough": "#33363c",
+      "table_header_bg": "#1f2126",
+      "table_header_fg": "#9aa1ac"
+    },
+    "fonts": {
+      "default": 10,
+      "small": 8,
+      "tiny": 8,
+      "title": ["19", "bold"],
+      "subtitle": 9,
+      "field_label": ["9", "bold"],
+      "card_value": ["13", "bold"],
+      "card_label": 8,
+      "button": ["9", "bold"]
+    }
   }
 }

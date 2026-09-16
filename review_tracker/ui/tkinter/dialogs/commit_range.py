@@ -2,16 +2,18 @@
 from __future__ import annotations
 
 import tkinter as tk
-from tkinter import ttk
+
+import customtkinter as ctk
 
 from .. import tk_util
 from ..naming_interface import NamingInterface
 from ..theme_integration import get_color
+from ..ctk_style import FONT, MONO_FONT, sz, fsz
 
 naming_interface = NamingInterface()
 
-DIALOG_WIDTH = 760
-DIALOG_HEIGHT = 520
+DIALOG_WIDTH = sz(760)
+DIALOG_HEIGHT = sz(520)
 
 
 class CommitRangeDialog:
@@ -22,44 +24,46 @@ class CommitRangeDialog:
     The public result is ``(oldest_sha, newest_sha)`` in oldest-to-newest order.
     """
 
-    def __init__(self, parent: tk.Tk | tk.Toplevel, commits: list[dict]) -> None:
+    def __init__(self, parent: ctk.CTk, commits: list[dict]) -> None:
         self.commits = commits  # Newest-first order, same as main.py display
         self.result: tuple[str, str] | None = None
         self.first_index = 0
         self.last_index = len(self.commits) - 1
 
-        self.window = tk.Toplevel(parent)
+        self.window = ctk.CTkToplevel(parent)
         self.window.title(naming_interface.get_attr("t_select_commit_range"))
         self.window.transient(parent)
         self.window.geometry(f"{DIALOG_WIDTH}x{DIALOG_HEIGHT}")
         self.window.resizable(False, True)
-        self.window.minsize(DIALOG_WIDTH, 470)
-        self.window.configure(background=get_color("background"))
+        self.window.minsize(DIALOG_WIDTH, sz(470))
+        self.window.configure(fg_color=get_color("background"))
         self.window.protocol("WM_DELETE_WINDOW", self._cancel)
 
-        content = ttk.Frame(self.window, style="Surface.TFrame", padding=20)
-        content.pack(fill="both", expand=True)
+        content = ctk.CTkFrame(self.window, corner_radius=sz(14), fg_color=get_color("surface"))
+        content.pack(fill="both", expand=True, padx=sz(16), pady=sz(16))
         content.columnconfigure(0, weight=1)
         content.rowconfigure(3, weight=1)
 
-        ttk.Label(content, text=naming_interface.get_attr("l_choose_commits"), style="Field.TLabel").grid(
-            row=0, column=0, sticky="w"
-        )
+        ctk.CTkLabel(
+            content, text=naming_interface.get_attr("l_choose_commits"), font=(FONT, fsz(11), "bold"),
+            text_color=get_color("text_muted"), anchor="w",
+        ).grid(row=0, column=0, sticky="w", padx=sz(18), pady=(sz(18), 0))
 
-        summary = ttk.Frame(content, style="Surface.TFrame")
-        summary.grid(row=1, column=0, sticky="ew", pady=(10, 4))
+        summary = ctk.CTkFrame(content, fg_color="transparent")
+        summary.grid(row=1, column=0, sticky="ew", padx=sz(18), pady=(sz(10), sz(4)))
         summary.columnconfigure((0, 1), weight=1)
         self.first_var = tk.StringVar()
         self.last_var = tk.StringVar()
         self._make_summary(summary, naming_interface.get_attr("l_from_older"), self.first_var, 0)
         self._make_summary(summary, naming_interface.get_attr("l_to_newer"), self.last_var, 1)
 
-        ttk.Label(content, text=naming_interface.get_attr("l_commit_direction"), style="Muted.TLabel").grid(
-            row=2, column=0, sticky="w", pady=(10, 6)
-        )
+        ctk.CTkLabel(
+            content, text=naming_interface.get_attr("l_commit_direction"), font=(FONT, fsz(10)),
+            text_color=get_color("text_muted"), anchor="w",
+        ).grid(row=2, column=0, sticky="w", padx=sz(18), pady=(sz(10), sz(6)))
 
-        list_frame = ttk.Frame(content, style="Surface.TFrame")
-        list_frame.grid(row=3, column=0, sticky="nsew")
+        list_frame = ctk.CTkFrame(content, fg_color="transparent")
+        list_frame.grid(row=3, column=0, sticky="nsew", padx=sz(18))
         self.commit_list = tk.Listbox(
             list_frame,
             height=12,
@@ -73,28 +77,31 @@ class CommitRangeDialog:
             relief="solid",
             borderwidth=1,
             highlightthickness=0,
+            font=(MONO_FONT, fsz(10)),
         )
         for index, commit in enumerate(self.commits):
             self.commit_list.insert("end", self._format(commit, index))
         self.commit_list.bind("<Button-1>", self._on_commit_click)
-        scrollbar = ttk.Scrollbar(
-            list_frame,
-            orient="vertical",
-            style="Slim.Vertical.TScrollbar",
-            command=self.commit_list.yview,
-        )
+        scrollbar = ctk.CTkScrollbar(list_frame, orientation="vertical", command=self.commit_list.yview)
         self.commit_list.configure(yscrollcommand=scrollbar.set)
         self.commit_list.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
 
-        actions = ttk.Frame(content, style="Surface.TFrame")
-        actions.grid(row=4, column=0, sticky="ew", pady=(12, 0))
+        actions = ctk.CTkFrame(content, fg_color="transparent")
+        actions.grid(row=4, column=0, sticky="ew", padx=sz(18), pady=(sz(12), sz(18)))
         self.count_var = tk.StringVar()
-        ttk.Label(actions, textvariable=self.count_var, style="Muted.TLabel").pack(side="left")
-        ttk.Button(actions, text=naming_interface.get_attr("b_cancel"), style="Secondary.TButton", command=self._cancel).pack(
-            side="right", padx=(6, 0)
-        )
-        ttk.Button(actions, text=naming_interface.get_attr("b_compare_range"), style="Accent.TButton", command=self._ok).pack(side="right")
+        ctk.CTkLabel(
+            actions, textvariable=self.count_var, font=(FONT, fsz(10)), text_color=get_color("text_muted"),
+        ).pack(side="left")
+        ctk.CTkButton(
+            actions, text=naming_interface.get_attr("b_cancel"), width=sz(90), height=sz(32), font=(FONT, fsz(11)),
+            fg_color=get_color("secondary_button"), hover_color=get_color("secondary_hover"),
+            text_color=get_color("text_secondary"), command=self._cancel,
+        ).pack(side="right", padx=(sz(6), 0))
+        ctk.CTkButton(
+            actions, text=naming_interface.get_attr("b_compare_range"), width=sz(120), height=sz(32), font=(FONT, fsz(11)),
+            command=self._ok,
+        ).pack(side="right")
 
         self._refresh_selection()
         tk_util.position_over_parent(self, parent, self.window)
@@ -103,11 +110,15 @@ class CommitRangeDialog:
         self.window.wait_window()
 
     @staticmethod
-    def _make_summary(parent: ttk.Frame, heading: str, variable: tk.StringVar, column: int) -> None:
-        frame = ttk.Frame(parent, style="Surface.TFrame", padding=(10, 7))
-        frame.grid(row=0, column=column, sticky="ew", padx=(0, 4) if column == 0 else (4, 0))
-        ttk.Label(frame, text=heading, style="Muted.TLabel").pack(anchor="w")
-        ttk.Label(frame, textvariable=variable, style="Field.TLabel").pack(anchor="w", pady=(2, 0))
+    def _make_summary(parent: ctk.CTkFrame, heading: str, variable: tk.StringVar, column: int) -> None:
+        frame = ctk.CTkFrame(parent, corner_radius=sz(10), fg_color=get_color("field_background"))
+        frame.grid(row=0, column=column, sticky="ew", padx=(0, sz(4)) if column == 0 else (sz(4), 0))
+        ctk.CTkLabel(
+            frame, text=heading, font=(FONT, fsz(9)), text_color=get_color("text_muted"), anchor="w",
+        ).pack(anchor="w", padx=sz(10), pady=(sz(7), 0))
+        ctk.CTkLabel(
+            frame, textvariable=variable, font=(FONT, fsz(11), "bold"), text_color=get_color("text_primary"), anchor="w",
+        ).pack(anchor="w", padx=sz(10), pady=(sz(2), sz(7)))
 
     def _format(self, commit: dict, index: int) -> str:
         marker = naming_interface.get_attr("v_newest") if index == 0 else naming_interface.get_attr("v_oldest") if index == len(self.commits) - 1 else ""
@@ -123,7 +134,7 @@ class CommitRangeDialog:
     def _on_commit_click(self, event: tk.Event) -> str:
         """Handle commit list click: single click selects one, Shift+click extends range."""
         index = self.commit_list.nearest(event.y)
-        
+
         if event.state & 0x1:  # Shift key is pressed
             # Shift+click: extend range to include clicked index (no gaps)
             self.first_index = min(self.first_index, index)
@@ -132,7 +143,7 @@ class CommitRangeDialog:
             # Regular click: select only this commit
             self.first_index = index
             self.last_index = index
-        
+
         self._refresh_selection()
         return "break"
 
@@ -173,7 +184,7 @@ class CommitRangeDialog:
         self.window.destroy()
 
 
-def pick_commit_range(parent: tk.Tk | tk.Toplevel, commits: list[dict]) -> tuple[str, str] | None:
+def pick_commit_range(parent: ctk.CTk, commits: list[dict]) -> tuple[str, str] | None:
     """Show the commit range picker and return (first_sha, last_sha), or None if cancelled."""
     if not commits:
         return None

@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import messagebox
+
+import customtkinter as ctk
 
 from .. import tk_util
 from ..naming_interface import NamingInterface
 from ..theme_integration import get_color
+from ..ctk_style import FONT, sz, fsz
 from review_tracker.data import feedback_request_store
 
 naming_interface = NamingInterface()
@@ -15,14 +18,14 @@ naming_interface = NamingInterface()
 class BugFeatureRequestDialog:
     """Modal dialog for submitting bug reports and feature requests."""
 
-    def __init__(self, parent: tk.Tk, current_user: str | None = None) -> None:
+    def __init__(self, parent: ctk.CTk, current_user: str | None = None) -> None:
         self.current_user = current_user or "Unknown"
-        self.window = tk.Toplevel(parent)
+        self.window = ctk.CTkToplevel(parent)
         self.window.title(naming_interface.get_attr("t_bug_feature_request"))
         self.window.transient(parent)
         self.window.resizable(False, False)
-        self.window.geometry("600x400")
-        self.window.configure(background=get_color("background"))
+        self.window.geometry(f"{sz(600)}x{sz(400)}")
+        self.window.configure(fg_color=get_color("background"))
         self.window.protocol("WM_DELETE_WINDOW", self.window.destroy)
 
         self._build_ui()
@@ -32,67 +35,55 @@ class BugFeatureRequestDialog:
 
     def _build_ui(self) -> None:
         """Build the dialog UI."""
-        content = ttk.Frame(self.window, style="Surface.TFrame", padding=16)
-        content.pack(fill="both", expand=True)
+        content = ctk.CTkFrame(self.window, corner_radius=sz(14), fg_color=get_color("surface"))
+        content.pack(fill="both", expand=True, padx=sz(16), pady=sz(16))
 
-        # Title
-        ttk.Label(content, text=naming_interface.get_attr("t_bug_feature_request"), style="Title.TLabel").pack(
-            anchor="w", pady=(0, 12)
-        )
+        ctk.CTkLabel(
+            content, text=naming_interface.get_attr("t_bug_feature_request"), font=(FONT, fsz(18), "bold"),
+            text_color=get_color("text_primary"), anchor="w",
+        ).pack(anchor="w", padx=sz(18), pady=(sz(18), sz(12)))
 
-        # Request Type
-        type_frame = ttk.Frame(content, style="Surface.TFrame")
-        type_frame.pack(fill="x", pady=(0, 12))
-
-        ttk.Label(type_frame, text=naming_interface.get_attr("l_request_type"), style="Field.TLabel").pack(
-            side="left", anchor="w"
-        )
-
+        type_frame = ctk.CTkFrame(content, fg_color="transparent")
+        type_frame.pack(fill="x", padx=sz(18), pady=(0, sz(12)))
+        ctk.CTkLabel(
+            type_frame, text=naming_interface.get_attr("l_request_type"), font=(FONT, fsz(11), "bold"),
+            text_color=get_color("text_muted"),
+        ).pack(side="left", anchor="w")
         self.request_type_var = tk.StringVar(value="Feature Request")
-        request_type_combo = ttk.Combobox(
-            type_frame,
-            textvariable=self.request_type_var,
-            values=["Bug Fix", "Feature Request"],
-            state="readonly",
-            width=20,
-        )
-        request_type_combo.pack(side="left", padx=(8, 0))
+        ctk.CTkComboBox(
+            type_frame, variable=self.request_type_var, values=["Bug Fix", "Feature Request"],
+            state="readonly", width=sz(180), height=sz(30), font=(FONT, fsz(11)),
+        ).pack(side="left", padx=(sz(8), 0))
 
-        # Description
-        ttk.Label(content, text=naming_interface.get_attr("l_description"), style="Field.TLabel").pack(
-            anchor="w", pady=(0, 4)
-        )
+        ctk.CTkLabel(
+            content, text=naming_interface.get_attr("l_description"), font=(FONT, fsz(11), "bold"),
+            text_color=get_color("text_muted"), anchor="w",
+        ).pack(anchor="w", padx=sz(18), pady=(0, sz(4)))
 
-        text_frame = ttk.Frame(content, style="Surface.TFrame")
-        text_frame.pack(fill="both", expand=True, pady=(0, 12))
-
-        self.description_text = tk.Text(text_frame, height=12, width=70, wrap="word")
-        scrollbar = ttk.Scrollbar(text_frame, orient="vertical", command=self.description_text.yview)
-        self.description_text.configure(yscrollcommand=scrollbar.set)
-        self.description_text.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
+        self.description_text = ctk.CTkTextbox(content, height=sz(190), wrap="word")
+        self.description_text.pack(fill="both", expand=True, padx=sz(18), pady=(0, sz(12)))
         self.description_text.focus_set()
 
-        # User info
-        ttk.Label(
+        ctk.CTkLabel(
             content,
             text=naming_interface.get_attr("l_submitted_by").format(user=self.current_user),
-            style="Muted.TLabel",
-        ).pack(anchor="w", pady=(0, 12))
+            font=(FONT, fsz(10)),
+            text_color=get_color("text_muted"),
+            anchor="w",
+        ).pack(anchor="w", padx=sz(18), pady=(0, sz(12)))
 
-        # Buttons
-        button_frame = ttk.Frame(content, style="Surface.TFrame")
-        button_frame.pack(fill="x", anchor="e")
+        button_frame = ctk.CTkFrame(content, fg_color="transparent")
+        button_frame.pack(fill="x", anchor="e", padx=sz(18), pady=(0, sz(18)))
+        ctk.CTkButton(
+            button_frame, text=naming_interface.get_attr("b_cancel"), width=sz(90), height=sz(32), font=(FONT, fsz(11)),
+            fg_color=get_color("secondary_button"), hover_color=get_color("secondary_hover"),
+            text_color=get_color("text_secondary"), command=self.window.destroy,
+        ).pack(side="right", padx=(sz(6), 0))
+        ctk.CTkButton(
+            button_frame, text=naming_interface.get_attr("b_submit"), width=sz(90), height=sz(32), font=(FONT, fsz(11)),
+            command=self._submit,
+        ).pack(side="right")
 
-        ttk.Button(
-            button_frame, text=naming_interface.get_attr("b_cancel"), style="Secondary.TButton", command=self.window.destroy
-        ).pack(side="left", padx=(0, 6))
-
-        ttk.Button(button_frame, text=naming_interface.get_attr("b_submit"), style="Accent.TButton", command=self._submit).pack(
-            side="left"
-        )
-
-        # Key bindings
         self.window.bind("<Return>", lambda _event: self._submit())
         self.window.bind("<Escape>", lambda _event: self.window.destroy())
 
