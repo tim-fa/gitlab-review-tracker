@@ -158,16 +158,20 @@ than API access.
 
 ## Project Structure
 
-| File | Purpose |
+| Path | Purpose |
 | --- | --- |
-| `main.py` | Tkinter application and review workflow |
-| `gitlab_client.py` | Read-only GitLab REST API client |
-| `review_state_store.py` | Shared JSON review-state management |
-| `commit_comparator.py` | Local git-based diff comparisons (Beyond Compare, compare-to-main) |
-| `git_helper.py` | Thin wrapper around `git` CLI commands (clone, fetch, checkout, clean) |
-| `ui_commit_range_dialog.py` | Modal dialog for picking a commit range to compare |
-| `ui_settings.py` | Settings window for token, paths, and refresh interval |
-| `naming_interface.py` | Loads UI text/labels from `constants.json` |
-| `constants.json` | UI text, labels, and messages used by `naming_interface.py` |
-| `tk_util.py` | Small Tkinter helper utilities (e.g. window positioning) |
+| `main.py` | Entry point; launches the Tkinter UI |
+| `review_tracker/data/gitlab_client.py` | Read-only GitLab REST API client |
+| `review_tracker/data/git_helper.py` | Thin wrapper around `git` CLI commands (clone, fetch, checkout, clean) |
+| `review_tracker/data/review_state_store.py` | Shared JSON review-state management |
+| `review_tracker/data/config_store.py` | Local application settings (`.gitlab_review_tracker.json`) |
+| `review_tracker/data/feedback_request_store.py` | Stores bug/feature requests submitted from the app |
+| `review_tracker/core/commit_comparator.py` | Local git-based diff comparisons (Beyond Compare, compare-to-main) |
+| `review_tracker/core/review_service.py` | UI-agnostic use-cases connecting the data layer to any UI |
+| `review_tracker/ui/tkinter/app.py` | Tkinter application and review workflow |
+| `review_tracker/ui/tkinter/dialogs/` | Settings, commit-range, and bug/feature-request dialogs |
+| `review_tracker/ui/tkinter/naming_interface.py` | Loads UI text/labels from `constants.json` |
+| `review_tracker/ui/tkinter/constants.json` | UI text, labels, and messages |
+| `review_tracker/ui/tkinter/theme_loader.py`, `theme_integration.py` | Tkinter theme/styling |
+| `review_tracker/ui/tkinter/tk_util.py` | Small Tkinter helper utilities (e.g. window positioning) |
 | `requirements.txt` | Python dependencies |
